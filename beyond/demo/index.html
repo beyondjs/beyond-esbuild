@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beyond ESBuild · Runtime laboratory</title><link rel="stylesheet" href="/site.css">
+</head>
+<body>
+  <header><p class="eyebrow">BEYOND ESBUILD / RUNTIME LABORATORY</p>
+    <h1>Internal modules.<br>Real browser delivery.</h1>
+    <p class="intro">The same React component consumes a Beyond module with four independent creators.
+      Each pane loads its own artifacts, runtime and module styles.</p>
+  </header>
+  <main class="comparison">
+    <iframe title="Native ESM delivery" src="/view?format=esm"></iframe>
+    <iframe title="SystemJS delivery" src="/view?format=system"></iframe>
+  </main>
+  <footer><p><b>ESM</b> uses native browser imports. <b>SystemJS</b> uses TypeScript envelope conversion and the real SystemJS loader.</p>
+    <p>CommonJS + React SSR and Express HTTP are verified separately in Node. This is a local CDN-format proof, not a deployed CDN.</p>
+  </footer>
+</body>
+</html>

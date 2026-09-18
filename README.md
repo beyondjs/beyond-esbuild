@@ -1,39 +1,41 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./images/wordmark-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="./images/wordmark-light.svg">
-    <img alt="esbuild: An extremely fast JavaScript bundler" src="./images/wordmark-light.svg">
-  </picture>
-  <br>
-  <a href="https://esbuild.github.io/">Website</a> |
-  <a href="https://esbuild.github.io/getting-started/">Getting started</a> |
-  <a href="https://esbuild.github.io/api/">Documentation</a> |
-  <a href="https://esbuild.github.io/plugins/">Plugins</a> |
-  <a href="https://esbuild.github.io/faq/">FAQ</a>
-</p>
+# Beyond ESBuild
 
-## Why?
+Beyond ESBuild is the [Beyond-maintained fork](https://github.com/beyondjs/beyond-esbuild) of [evanw/esbuild](https://github.com/evanw/esbuild), used to develop and test compilation for Beyond's modular runtime and package distribution.
 
-Our current build tools for the web are 10-100x slower than they could be:
+**Current status: preparation and bounded tests with existing APIs/adapters. The esbuild compiler core has not been modified.** The working demo establishes only the recorded fixture behavior; complete Beyond implementation and production integration remain open for a new implementation task.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./images/benchmark-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="./images/benchmark-light.svg">
-    <img alt="Bar chart with benchmark results" src="./images/benchmark-light.svg">
-  </picture>
-</p>
+Beyond delivers addressable public modules composed from internal source modules. Their bare public references, internal identities, exports and dependency relationships must survive compilation. This repository makes those requirements executable before adapting the compiler core.
 
-The main goal of the esbuild bundler project is to bring about a new era of build tool performance, and create an easy-to-use modern bundler along the way.
+Three independent responsibilities guide the prepared examples and the next implementation:
 
-Major features:
+- **Beyond-authored modules:** compile individual TypeScript internals into separate runtime creators, then compose public CommonJS, ESM and System.register artifacts. Execute the real Kernel and update an already loaded consumer without replacing its public identity.
+- **Existing packages:** compile React and ReactDOM into independently addressable distribution artifacts, exercise Node server rendering, and supply browser ESM/SystemJS consumers. Express separately exercises Node CommonJS/ESM packaging through actual HTTP requests.
+- **Dependency traversal:** use esbuild's file-by-file traversal to retain direct and transitive source edges, then classify Beyond public references and package/version identities separately. This graph path has its own assertions and emitted evidence; a metafile is not a replacement package resolver.
 
-- Extreme speed without needing a cache
-- [JavaScript](https://esbuild.github.io/content-types/#javascript), [CSS](https://esbuild.github.io/content-types/#css), [TypeScript](https://esbuild.github.io/content-types/#typescript), and [JSX](https://esbuild.github.io/content-types/#jsx) built-in
-- A straightforward [API](https://esbuild.github.io/api/) for CLI, JS, and Go
-- Bundles ESM and CommonJS modules
-- Bundles CSS including [CSS modules](https://github.com/css-modules/css-modules)
-- Tree shaking, [minification](https://esbuild.github.io/api/#minify), and [source maps](https://esbuild.github.io/api/#sourcemap)
-- [Local server](https://esbuild.github.io/api/#serve), [watch mode](https://esbuild.github.io/api/#watch), and [plugins](https://esbuild.github.io/plugins/)
+The local browser demo combines the authored module, compiled React, and independently served modular CSS. JavaScript and CSS graphs retain file relationships separately from public-module and package/version identities. SystemJS is an explicit conversion adapter; it is not a native esbuild output format.
 
-Check out the [getting started](https://esbuild.github.io/getting-started/) instructions if you want to give esbuild a try.
+## Start
+
+Read [setup and execution](docs/setup.md) for the complete commands, pinned dependencies and generated artifact locations. The short sequence, after a compatible Go toolchain and Node 22 are installed, is:
+
+```sh
+node beyond/prepare.mjs
+node --test beyond/capabilities.test.mjs
+```
+
+The preparation script builds **this checkout's compiler and matching API**. It does not silently substitute an installed npm esbuild. Scenario dependencies and generated output stay under ignored `beyond/.cache/`.
+
+## Guides
+
+- [Scenario index and current evidence](docs/README.md)
+- [Beyond compilation and runtime contracts](docs/beyond-architecture.md)
+- [Requirements, acceptance cases and unknowns](docs/requirements.md)
+- [Compiler subsystem audit and reading coverage](docs/compiler-audit.md)
+- [Executable assessment workspace](beyond/README.md)
+- [Coding standards](docs/coding-standards.md) and [contributor instructions](AGENTS.md)
+
+The current work adds bounded adapters, fixtures and validation. The upstream compiler implementation remains unchanged; no consumer migration, package publication or production CDN deployment has occurred. Passing local examples does not establish complete Packages integration or a general-purpose runtime adapter.
+
+## Upstream and license
+
+The compiler retains esbuild's source layout, public APIs, history and [MIT license](LICENSE.md), including Evan Wallace's attribution. The [original upstream introduction](docs/upstream.md), [upstream architecture](docs/architecture.md) and [upstream development guide](docs/development.md) remain available. See the [esbuild documentation](https://esbuild.github.io/) for the underlying compiler API and supported syntax.

@@ -1,0 +1,9 @@
+@import './palette.css';
+:host { display: block; font: 16px/1.55 system-ui, sans-serif; color: #19334a; }
+.probe { color: var(--module-accent); font-weight: 700; }
+.content { padding: 25px; background: #fff; border-radius: 12px; }
+h2 { font: 28px/1.2 Georgia, serif; margin: 0 0 15px; }
+button { cursor: pointer; background: #245b75; color: white; border: 0; border-radius: 6px; padding: 10px 16px; margin: 5px 8px 0 0; font: inherit; }
+button:focus-visible { outline: 3px solid #d17443; outline-offset: 3px; }
+output { display: block; font: 14px/1.8 ui-monospace, monospace; }
+.label { text-transform: uppercase; letter-spacing: .08em; font: 12px/1.5 ui-monospace, monospace; }
