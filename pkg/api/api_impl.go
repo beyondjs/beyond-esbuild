@@ -118,6 +118,18 @@ func validatePlatform(value Platform) config.Platform {
 	}
 }
 
+// Beyond ESBuild: assigned exports only exist for the CommonJS output format
+func validateCJSExports(log logger.Log, value CJSExports, format Format) bool {
+	if value != CJSExportsAssign {
+		return false
+	}
+	if format != FormatCommonJS {
+		log.AddError(nil, logger.Range{}, "Assigned CommonJS exports require the \"cjs\" output format")
+		return false
+	}
+	return true
+}
+
 func validateFormat(value Format) config.Format {
 	switch value {
 	case FormatDefault:
@@ -1296,6 +1308,7 @@ func validateBuildOptions(
 		MinifyWhitespace:      buildOpts.MinifyWhitespace,
 		MinifyIdentifiers:     buildOpts.MinifyIdentifiers,
 		LineLimit:             buildOpts.LineLimit,
+		CJSAssignExports:      validateCJSExports(log, buildOpts.CJSExports, buildOpts.Format),
 		MangleProps:           validateRegex(log, "mangle props", buildOpts.MangleProps),
 		ReserveProps:          validateRegex(log, "reserve props", buildOpts.ReserveProps),
 		MangleQuoted:          buildOpts.MangleQuoted == MangleQuotedTrue,
@@ -1766,6 +1779,7 @@ func transformImpl(input string, transformOpts TransformOptions) TransformResult
 		MinifyWhitespace:      transformOpts.MinifyWhitespace,
 		MinifyIdentifiers:     transformOpts.MinifyIdentifiers,
 		LineLimit:             transformOpts.LineLimit,
+		CJSAssignExports:      validateCJSExports(log, transformOpts.CJSExports, transformOpts.Format),
 		MangleProps:           validateRegex(log, "mangle props", transformOpts.MangleProps),
 		ReserveProps:          validateRegex(log, "reserve props", transformOpts.ReserveProps),
 		MangleQuoted:          transformOpts.MangleQuoted == MangleQuotedTrue,

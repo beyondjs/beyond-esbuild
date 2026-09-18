@@ -565,6 +565,16 @@ func Source(unsupportedJSFeatures compat.JSFeature) logger.Source {
 			}
 			return next()
 		}
+
+		// Beyond ESBuild: this implements "export * from" statements when CommonJS
+		// exports are written as assignments on the free "exports" object. The name
+		// is on the forbidden "tslib" list above on purpose: "cjs-module-lexer" only
+		// reports a star re-export for this exact name and argument order, and the
+		// TypeScript helper it could collide with has the same contract. It is only
+		// emitted for assigned CommonJS exports and is declared last so the part
+		// order of the upstream helpers, and therefore upstream chunk hashes, stay
+		// unchanged.
+		export var __exportStar = (mod, target) => __copyProps(target, mod, 'default')
 	`
 
 	return logger.Source{

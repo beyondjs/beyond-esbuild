@@ -466,6 +466,11 @@ type Options struct {
 	JSX        JSXOptions
 	LineLimit  int
 
+	// Beyond ESBuild: when the output format is CommonJS, write the exports of
+	// an ESM entry point as assignments on the free "exports" object instead of
+	// as getters on a new "module.exports" object. See "docs/cjs-exports.md".
+	CJSAssignExports bool
+
 	CSSPrefixData          map[css_ast.D]compat.CSSPrefix
 	UnsupportedJSFeatures  compat.JSFeature
 	UnsupportedCSSFeatures compat.CSSFeature

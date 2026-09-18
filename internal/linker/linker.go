@@ -69,6 +69,11 @@ type linkerContext struct {
 	// We may need to refer to the CommonJS "module" symbol for exports
 	unboundModuleRef ast.Ref
 
+	// Beyond ESBuild: assigned CommonJS exports refer to the free "exports"
+	// object and to "Object.defineProperty". See "cjs_assign_exports.go".
+	unboundExportsRef ast.Ref
+	unboundObjectRef  ast.Ref
+
 	// We may need to refer to the "__esm" and/or "__commonJS" runtime symbols
 	cjsRuntimeRef ast.Ref
 	esmRuntimeRef ast.Ref
@@ -307,6 +312,13 @@ func Link(
 		c.unboundModuleRef = c.graph.GenerateNewSymbol(runtime.SourceIndex, ast.SymbolUnbound, "module")
 	} else {
 		c.unboundModuleRef = ast.InvalidRef
+	}
+	if c.options.CJSAssignExports && c.options.OutputFormat == config.FormatCommonJS {
+		c.unboundExportsRef = c.graph.GenerateNewSymbol(runtime.SourceIndex, ast.SymbolUnbound, "exports")
+		c.unboundObjectRef = c.graph.GenerateNewSymbol(runtime.SourceIndex, ast.SymbolUnbound, "Object")
+	} else {
+		c.unboundExportsRef = ast.InvalidRef
+		c.unboundObjectRef = ast.InvalidRef
 	}
 
 	c.scanImportsAndExports()
@@ -1571,6 +1583,7 @@ func (c *linkerContext) scanImportsAndExports() {
 	// for CommonJS files, and is also necessary for other files if they are
 	// imported using an import star statement.
 	c.timer.Begin("Step 5")
+	c.aliasMutableCJSExports()
 	waitGroup := sync.WaitGroup{}
 	for _, sourceIndex := range c.graph.ReachableFiles {
 		repr, ok := c.graph.Files[sourceIndex].InputFile.Repr.(*graph.JSRepr)
@@ -1881,7 +1894,7 @@ func (c *linkerContext) scanImportsAndExports() {
 			repr.Meta.EntryPointPartIndex = ast.MakeIndex32(entryPointPartIndex)
 
 			// Pull in the "__toCommonJS" symbol if we need it due to being an entry point
-			if repr.Meta.ForceIncludeExportsForEntryPoint {
+			if repr.Meta.ForceIncludeExportsForEntryPoint && !c.assignsCJSExports(sourceIndex) {
 				c.graph.GenerateRuntimeSymbolImportAndUse(sourceIndex, entryPointPartIndex, "__toCommonJS", 1)
 			}
 		}
@@ -2014,14 +2027,22 @@ func (c *linkerContext) scanImportsAndExports() {
 					}
 				}
 				if happensAtRunTime {
-					// Depend on this file's "exports" object for the first argument to "__reExport"
-					c.graph.GenerateSymbolImportAndUse(sourceIndex, uint32(partIndex), repr.AST.ExportsRef, 1, sourceIndex)
 					record.Flags |= ast.CallsRunTimeReExportFn
-					repr.AST.UsesExportsRef = true
 					reExportUses++
+
+					// Assigned CommonJS exports copy onto the free "exports" object instead
+					if !c.assignsCJSExports(sourceIndex) {
+						// Depend on this file's "exports" object for the first argument to "__reExport"
+						c.graph.GenerateSymbolImportAndUse(sourceIndex, uint32(partIndex), repr.AST.ExportsRef, 1, sourceIndex)
+						repr.AST.UsesExportsRef = true
+					}
 				}
 			}
-			c.graph.GenerateRuntimeSymbolImportAndUse(sourceIndex, uint32(partIndex), "__reExport", reExportUses)
+			if c.assignsCJSExports(sourceIndex) {
+				c.graph.GenerateRuntimeSymbolImportAndUse(sourceIndex, uint32(partIndex), "__exportStar", reExportUses)
+			} else {
+				c.graph.GenerateRuntimeSymbolImportAndUse(sourceIndex, uint32(partIndex), "__reExport", reExportUses)
+			}
 		}
 	}
 	c.timer.End("Step 6")
@@ -2270,6 +2291,12 @@ func (c *linkerContext) createExportsForFile(sourceIndex uint32) {
 
 	file := &c.graph.Files[sourceIndex]
 	repr := file.InputFile.Repr.(*graph.JSRepr)
+
+	// Beyond ESBuild: write assignments on the free "exports" object instead
+	if c.assignsCJSExports(sourceIndex) {
+		c.createAssignedExportsForFile(sourceIndex)
+		return
+	}
 
 	// Generate a getter per export
 	properties := []js_ast.Property{}
@@ -4327,7 +4354,8 @@ func (c *linkerContext) convertStmtsForChunk(sourceIndex uint32, stmtList *stmtL
 	// importing itself should not see the "__esModule" marker but a CommonJS module
 	// importing us should see the "__esModule" marker.
 	var moduleExportsForReExportOrNil js_ast.Expr
-	if c.options.OutputFormat == config.FormatCommonJS && file.IsEntryPoint() {
+	assignsExports := c.assignsCJSExports(sourceIndex)
+	if c.options.OutputFormat == config.FormatCommonJS && file.IsEntryPoint() && !assignsExports {
 		moduleExportsForReExportOrNil = js_ast.Expr{Data: &js_ast.EDot{
 			Target: js_ast.Expr{Data: &js_ast.EIdentifier{Ref: c.unboundModuleRef}},
 			Name:   "exports",
@@ -4453,6 +4481,14 @@ func (c *linkerContext) convertStmtsForChunk(sourceIndex uint32, stmtList *stmtL
 					if moduleExportsForReExportOrNil.Data != nil {
 						args = append(args, moduleExportsForReExportOrNil)
 					}
+					if assignsExports {
+						// Prefix this module with "__exportStar(require(path), exports)"
+						exportStarRef = c.graph.Files[runtime.SourceIndex].InputFile.Repr.(*graph.JSRepr).AST.ModuleScope.Members["__exportStar"].Ref
+						args = []js_ast.Expr{
+							{Loc: record.Range.Loc, Data: target},
+							{Loc: stmt.Loc, Data: &js_ast.EIdentifier{Ref: c.unboundExportsRef}},
+						}
+					}
 					stmtList.insideWrapperPrefix = append(stmtList.insideWrapperPrefix, js_ast.Stmt{
 						Loc: stmt.Loc,
 						Data: &js_ast.SExpr{Value: js_ast.Expr{Loc: stmt.Loc, Data: &js_ast.ECall{
@@ -4544,6 +4580,14 @@ func (c *linkerContext) convertStmtsForChunk(sourceIndex uint32, stmtList *stmtL
 				clone := *s
 				clone.IsExport = false
 				stmt.Data = &clone
+			}
+
+			// Beyond ESBuild: reassigned exports are properties of "exports"
+			if assignsExports {
+				if converted, ok := c.convertLocalForAssignedExports(stmt, s); ok {
+					stmtList.insideWrapperSuffix = append(stmtList.insideWrapperSuffix, converted...)
+					continue
+				}
 			}
 
 		case *js_ast.SExportDefault:
@@ -4962,6 +5006,8 @@ func (c *linkerContext) generateCodeForFileInChunkJS(
 		LineLimit:                    c.options.LineLimit,
 		ASCIIOnly:                    c.options.ASCIIOnly,
 		ToCommonJSRef:                toCommonJSRef,
+		AssignsExports:               c.unboundExportsRef != ast.InvalidRef,
+		AssignedExportsRef:           c.unboundExportsRef,
 		ToESMRef:                     toESMRef,
 		RuntimeRequireRef:            runtimeRequireRef,
 		TSEnums:                      c.graph.TSEnums,
@@ -5047,7 +5093,10 @@ func (c *linkerContext) generateEntryPointTailJS(
 		}
 
 	case config.FormatCommonJS:
-		if repr.Meta.Wrap == graph.WrapCJS {
+		if c.assignsCJSExports(sourceIndex) {
+			// "exports.foo = foo;"
+			stmts = append(stmts, c.assignedCJSExportStmts(sourceIndex, false)...)
+		} else if repr.Meta.Wrap == graph.WrapCJS {
 			// "module.exports = require_foo();"
 			stmts = append(stmts, js_ast.AssignStmt(
 				js_ast.Expr{Data: &js_ast.EDot{
@@ -5072,7 +5121,7 @@ func (c *linkerContext) generateEntryPointTailJS(
 		// of this parser, which the node project uses to detect named exports in
 		// CommonJS files: https://github.com/guybedford/cjs-module-lexer. Think of
 		// this code as an annotation for that parser.
-		if c.options.Platform == config.PlatformNode {
+		if c.options.Platform == config.PlatformNode && !c.assignsCJSExports(sourceIndex) {
 			// Add a comment since otherwise people will surely wonder what this is.
 			// This annotation means you can do this and have it work:
 			//
@@ -5307,6 +5356,8 @@ func (c *linkerContext) generateEntryPointTailJS(
 		LineLimit:                    c.options.LineLimit,
 		ASCIIOnly:                    c.options.ASCIIOnly,
 		ToCommonJSRef:                toCommonJSRef,
+		AssignsExports:               c.unboundExportsRef != ast.InvalidRef,
+		AssignedExportsRef:           c.unboundExportsRef,
 		ToESMRef:                     toESMRef,
 		LegalComments:                c.options.LegalComments,
 		UnsupportedFeatures:          c.options.UnsupportedJSFeatures,

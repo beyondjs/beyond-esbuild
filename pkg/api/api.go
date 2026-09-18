@@ -169,6 +169,17 @@ const (
 	PlatformNeutral
 )
 
+// Beyond ESBuild: how the exports of an ESM entry point are written when the
+// output format is CommonJS. "Getters" is the unchanged upstream behavior.
+// "Assign" writes them as assignments on the free "exports" object.
+type CJSExports uint8
+
+const (
+	CJSExportsDefault CJSExports = iota
+	CJSExportsGetters
+	CJSExportsAssign
+)
+
 type Format uint8
 
 const (
@@ -312,6 +323,7 @@ type BuildOptions struct {
 	MinifyIdentifiers bool                   // Documentation: https://esbuild.github.io/api/#minify
 	MinifySyntax      bool                   // Documentation: https://esbuild.github.io/api/#minify
 	LineLimit         int                    // Documentation: https://esbuild.github.io/api/#line-limit
+	CJSExports        CJSExports             // Beyond ESBuild: see "docs/cjs-exports.md"
 	Charset           Charset                // Documentation: https://esbuild.github.io/api/#charset
 	TreeShaking       TreeShaking            // Documentation: https://esbuild.github.io/api/#tree-shaking
 	IgnoreAnnotations bool                   // Documentation: https://esbuild.github.io/api/#ignore-annotations
@@ -449,6 +461,7 @@ type TransformOptions struct {
 	MinifyIdentifiers bool                   // Documentation: https://esbuild.github.io/api/#minify
 	MinifySyntax      bool                   // Documentation: https://esbuild.github.io/api/#minify
 	LineLimit         int                    // Documentation: https://esbuild.github.io/api/#line-limit
+	CJSExports        CJSExports             // Beyond ESBuild: see "docs/cjs-exports.md"
 	Charset           Charset                // Documentation: https://esbuild.github.io/api/#charset
 	TreeShaking       TreeShaking            // Documentation: https://esbuild.github.io/api/#tree-shaking
 	IgnoreAnnotations bool                   // Documentation: https://esbuild.github.io/api/#ignore-annotations

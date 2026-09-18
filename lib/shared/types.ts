@@ -50,6 +50,8 @@ interface CommonOptions {
   minifySyntax?: boolean
   /** Documentation: https://esbuild.github.io/api/#line-limit */
   lineLimit?: number
+  /** Beyond ESBuild: write CommonJS exports as getters (default) or as assignments on `exports` */
+  cjsExports?: 'getters' | 'assign'
   /** Documentation: https://esbuild.github.io/api/#charset */
   charset?: Charset
   /** Documentation: https://esbuild.github.io/api/#tree-shaking */

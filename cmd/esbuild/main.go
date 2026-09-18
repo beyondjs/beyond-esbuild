@@ -95,6 +95,8 @@ var helpText = func(colors logger.Colors) string {
   --legal-comments=...      Where to place legal comments (none | inline |
                             eof | linked | external, default eof when bundling
                             and inline otherwise)
+  --cjs-exports=...         Write CommonJS exports as getters (default) or as
+                            assignments on "exports" (getters | assign)
   --line-limit=...          Lines longer than this will be wrap onto a new line
   --log-level=...           Disable logging (verbose | debug | info | warning |
                             error | silent, default info)

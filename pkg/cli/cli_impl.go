@@ -805,6 +805,26 @@ func parseOptionsImpl(
 				transformOpts.LineLimit = limit
 			}
 
+		case strings.HasPrefix(arg, "--cjs-exports="):
+			value := arg[len("--cjs-exports="):]
+			var cjsExports api.CJSExports
+			switch value {
+			case "getters":
+				cjsExports = api.CJSExportsGetters
+			case "assign":
+				cjsExports = api.CJSExportsAssign
+			default:
+				return parseOptionsExtras{}, cli_helpers.MakeErrorWithNote(
+					fmt.Sprintf("Invalid value %q in %q", value, arg),
+					"Valid values are \"getters\" or \"assign\".",
+				)
+			}
+			if buildOpts != nil {
+				buildOpts.CJSExports = cjsExports
+			} else {
+				transformOpts.CJSExports = cjsExports
+			}
+
 			// Make sure this stays in sync with "PrintErrorToStderr"
 		case isBoolFlag(arg, "--color"):
 			if value, err := parseBoolFlag(arg, true); err != nil {

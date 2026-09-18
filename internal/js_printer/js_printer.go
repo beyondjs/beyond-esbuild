@@ -1219,7 +1219,7 @@ func (p *printer) printProperty(property js_ast.Property) {
 			if !p.options.UnsupportedFeatures.Has(compat.ObjectExtensions) && property.ValueOrNil.Data != nil && !p.willPrintExprCommentsAtLoc(property.ValueOrNil.Loc) {
 				switch e := property.ValueOrNil.Data.(type) {
 				case *js_ast.EIdentifier:
-					if name == p.renamer.NameForSymbol(e.Ref) {
+					if name == p.renamer.NameForSymbol(e.Ref) && p.assignedExportAlias(e.Ref) == nil {
 						if property.InitializerOrNil.Data != nil {
 							p.printSpace()
 							p.print("=")
@@ -1257,7 +1257,7 @@ func (p *printer) printProperty(property js_ast.Property) {
 			if !p.options.UnsupportedFeatures.Has(compat.ObjectExtensions) && property.ValueOrNil.Data != nil && !p.willPrintExprCommentsAtLoc(property.ValueOrNil.Loc) {
 				switch e := property.ValueOrNil.Data.(type) {
 				case *js_ast.EIdentifier:
-					if canUseShorthandProperty(key.Value, p.renamer.NameForSymbol(e.Ref), property.Flags) {
+					if canUseShorthandProperty(key.Value, p.renamer.NameForSymbol(e.Ref), property.Flags) && p.assignedExportAlias(e.Ref) == nil {
 						if p.options.AddSourceMappings {
 							p.addSourceMappingForName(property.Key.Loc, helpers.UTF16ToString(key.Value), e.Ref)
 						}
@@ -1636,6 +1636,44 @@ func (p *printer) printDotThenSuffix() {
 		p.printIndent()
 		p.print("})")
 	} else {
+		p.print(")")
+	}
+}
+
+// Beyond ESBuild: a reassigned export of an assigned CommonJS entry point is a
+// property of the free "exports" object instead of a local binding
+func (p *printer) assignedExportAlias(ref ast.Ref) *ast.NamespaceAlias {
+	if !p.options.AssignsExports {
+		return nil
+	}
+	alias := p.symbols.Get(ast.FollowSymbols(p.symbols, ref)).NamespaceAlias
+	if alias == nil || alias.NamespaceRef != p.options.AssignedExportsRef {
+		return nil
+	}
+	return alias
+}
+
+func (p *printer) printAssignedExport(loc logger.Loc, e *js_ast.EIdentifier, alias *ast.NamespaceAlias) {
+	// "(0, exports.fn)()" calls the function without "exports" as "this"
+	wrap := p.callTarget == e
+	if wrap {
+		p.print("(0,")
+		p.printSpace()
+	}
+	p.printSpaceBeforeIdentifier()
+	p.addSourceMapping(loc)
+	p.printIdentifier(p.renamer.NameForSymbol(alias.NamespaceRef))
+	if p.canPrintIdentifier(alias.Alias) {
+		p.print(".")
+		p.addSourceMappingForName(loc, alias.Alias, e.Ref)
+		p.printIdentifier(alias.Alias)
+	} else {
+		p.print("[")
+		p.addSourceMappingForName(loc, alias.Alias, e.Ref)
+		p.printQuotedUTF8(alias.Alias, printQuotedAllowBacktick)
+		p.print("]")
+	}
+	if wrap {
 		p.print(")")
 	}
 }
@@ -3145,6 +3183,11 @@ func (p *printer) printExpr(expr js_ast.Expr, level js_ast.L, flags printExprFla
 		p.printNumber(e.Value, level)
 
 	case *js_ast.EIdentifier:
+		if alias := p.assignedExportAlias(e.Ref); alias != nil {
+			p.printAssignedExport(expr.Loc, e, alias)
+			break
+		}
+
 		name := p.renamer.NameForSymbol(e.Ref)
 		wrap := len(p.js) == p.forOfInitStart && (name == "let" ||
 			((flags&isFollowedByOf) != 0 && (flags&isInsideForAwait) == 0 && name == "async"))
@@ -4944,6 +4987,11 @@ type Options struct {
 	AddSourceMappings   bool
 	NeedsMetafile       bool
 	MetafileFormat      config.MetafileFormat
+
+	// Beyond ESBuild: when enabled, local symbols whose namespace alias targets
+	// this "exports" symbol are printed as properties of that object
+	AssignsExports     bool
+	AssignedExportsRef ast.Ref
 }
 
 type RequireOrImportMeta struct {
