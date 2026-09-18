@@ -1,34 +1,44 @@
 # Beyond ESBuild handoff
 
-Updated 2026-09-18 after the second delivery. Durable contracts, commands and results live in `docs/`; this file only orients whoever resumes and can be retired once the open items below are decided. Inspect the task and Git state first: other suite work continues in parallel.
+Updated 2026-09-18 after the third delivery. Durable contracts, commands and results live in `docs/`; this file only orients whoever resumes and can be retired once the open items below are decided. Inspect the task and Git state first: other suite work continues in parallel.
+
+## Current execution-mode scope
+
+The owner clarified that esbuild packaging is intended for production and development, with HMR required in development. Its output does not require internal creators. Development must eventually allow per-public-module selection between that path and the unified Kernel/Local runtime, provisionally checked out as `local-2026`. See [execution modes](../docs/execution-modes.md).
+
+The third delivery worked within that scope: packaging, its update behavior and a bounded Packages integration. It did not implement the unified runtime or the complete mode switch. Existing creator tests remain valid compatibility evidence; their re-export limitation did not become a packaging requirement. The [continuation response](next-agent.md) is the request that delivery answered; a new continuation should start from the open decisions below.
 
 ## State
 
-- Fork <https://github.com/beyondjs/beyond-esbuild> of `evanw/esbuild`, branch `feature/next`, esbuild `0.28.2`. `4559612a` is the first delivery (fixtures, adapters, guides) on upstream `f6058f83`.
-- The second delivery is committed locally on top of it with owner authorization, as two commits: `6241fc5a` is the compiler change with its regression suite and guide; the following commit holds the fixtures, tests and updated guides. Nothing was pushed or published, and no consumer was migrated. Further commits, pushes, publication and general consumer migration still need explicit authorization.
-- The manual demo server may still be listening on `http://127.0.0.1:4178`; restart it with `node beyond/demo/server.mjs` after rebuilding.
+- Fork <https://github.com/beyondjs/beyond-esbuild> of `evanw/esbuild`, branch `feature/next`, esbuild `0.28.2`. Committed locally, not pushed: `4559612a` first delivery, `6241fc5a` the opt-in compiler change, `7efe3fb4` its fixtures and guides.
+- The third delivery is committed locally on top of `7efe3fb4` with owner authorization: `beyond/packaging/`, `beyond/package.mjs`, `docs/packaging.md`, guide updates and the owner's execution-mode revisions. It changes no Go or `lib/` source. Nothing is pushed or published; further commits, pushes and publication need explicit authorization.
+- The Packages trial is committed locally in the Packages checkout as `dbfd08f`: a new `modules/bundlers/esbuild/`, optional-patch changes in `modules/artifacts/` and `modules/sdk/conditional/esm/index.ts`, `tests/esbuild-packaging/` and documentation. It needs the Packages owner's review before anything else.
+- The Engine instances this work started for Packages (1110–1112) and the watchers utility (1120) were stopped afterwards. The manual demo server may still be listening on `http://127.0.0.1:4178`; restart it with `node beyond/demo/server.mjs` after rebuilding.
 
-## What the second delivery did
+## What the third delivery did
 
-1. Reproduced the first-delivery baseline unchanged.
-2. Compiler: `cjsExports: 'assign'` (`--cjs-exports=assign`), documented in `docs/cjs-exports.md` with the contract, the alternatives measured first, the implementation map and limits. Upstream snapshots and helper order are unchanged; regressions are `internal/bundler_tests/bundler_beyond_test.go`.
-3. Authored path: creators are esbuild output unchanged (no bridge), names come from `cjs-module-lexer`, the assembler mirrors Packages (star composition, `_default`, ordering, reserved names), and maps are composed for ESM, CommonJS and System.register. `beyond/example/creators.test.mjs` holds cases L1–L6 and M1 against the actual Kernel.
-4. Graphs: `beyond/graph/` keeps files, public modules and packages/versions separate, handles esbuild's erased-import metafile records, mirrors Packages' dependency diagnostics, and adds manifest-joined package edges to the React and Express reports.
-5. Traditional packages: `react/jsx-runtime` is packaged and consumed by SSR and by the browser demo.
-6. CSS: `beyond/demo/styles.mjs` with dependency invalidation and fail-closed rebuilds; the browser replaces a module stylesheet through the Kernel `change()` contract.
+1. Established that the authored example implements runtime composition, and added a packaged authored path: `Authored`, `Packaged`, `Boundary`, cases K1–K5.
+2. Re-exports reproduced through an independent consuming public module: correct in ESM, native CommonJS and assigned CommonJS. Development propagation depends on re-addressing public dependents through the graph (closure identity), not on the compiler; a loaded consumer is a reload boundary.
+3. Assessed `cjsExports: 'assign'` per path: needed for creators only.
+4. Generic published-package closure with pinned Vue, Svelte, Radix, Headless UI, Shoelace and Lit: framework source adapters, CommonJS adapters, conditional exports, subpaths, peer dependencies, styles, minification; Node SSR and Chromium, native ESM and the System.register adapter.
+5. Two state hazards found by execution and handled in adapters: published siblings become public references; subpaths sharing unpublished files are split natively.
+6. Packages trial: per-module selection through the existing `bundler` key, explicit compiler selection with the resolved identity reported, production conditional, watched development rebuild. 7 of 7; stage-1 still 21 of 21.
 
-`docs/validation.md` has the exact commands and results: 16 Go packages, the authored runner, 25 Node tests, Chromium ESM and SystemJS.
+`docs/packaging.md` has contracts, findings, coverage and limits; `docs/validation.md` has the run record: 16 Go packages, 37 Node tests, the runner, two Chromium verifications, the Packages trial.
 
 ## Open decisions for the owner
 
-- Pushing `feature/next` to the fork remote. The second delivery is committed locally only.
-- Re-exports in creators keep TypeScript's accessor boundary (cases L3, L4). Configurable accessors plus a lexer annotation would allow in-place replacement; recorded as a proposal in `docs/requirements.md`, not implemented.
-- Whether Packages should adopt the fork for its TypeScript creator path. That is consumer migration and was not started; Packages pins upstream `esbuild ~0.25.9`.
+- Pushing `feature/next` in the fork, Packages and the suite, and the Packages owner's review of the trial bundler.
+- How Packages obtains the fork: a published identity and version policy, or a location setting as in the trial.
+- The development update strategy for packaged modules: reload through the public graph, or finer replacement. The independent HMR audit addresses this; nothing here presumes its result.
+- Whether CommonJS output is retired and whether System.register stays a delivery format in Packages. The adapter carried everything tried; no case justifies native emission.
+- Where framework source adapters belong in Packages.
+- Runtime composition only: replaceable re-exports in creators remain a proposal, not a packaging requirement.
 
 ## Remaining limits
 
-Listed in `docs/validation.md#remaining-limits` and `docs/cjs-exports.md#limits`. In short: no watcher, transport, rollback or disposal; public shape changes need a reload; `import type` and computed specifiers are outside the graphs; nothing selects or solves versions; plain CSS only; System.register remains a TypeScript adapter; upstream JavaScript, WASM and end-to-end scripts were not run; assigned exports were not exercised with minification, splitting or ES5 lowering.
+Listed in `docs/packaging.md#remaining-work-and-blocking-decisions`, `docs/validation.md#remaining-limits-of-this-delivery` and `docs/cjs-exports.md#limits`. In short: no update reaches a running consumer in the packaging mode; the Packages bundler is Node-only, one module at a time, without closure identity, cohesion or adapters; coverage is the pinned list; the unified runtime was not involved.
 
 ## Resuming
 
-Read `AGENTS.md`, `docs/README.md`, `docs/setup.md`, `docs/beyond-architecture.md`, `docs/cjs-exports.md`, `docs/requirements.md` and `docs/validation.md`, then reproduce the second-delivery run from `docs/setup.md` before changing anything. `GO=/absolute/path/to/go` and `PLAYWRIGHT=/absolute/path/to/playwright` select local tooling. Install the complete pinned dependency list in one command.
+Read `AGENTS.md`, `docs/README.md`, `docs/execution-modes.md`, `docs/packaging.md`, `docs/setup.md` and `docs/validation.md`, then reproduce the third-delivery run before changing anything. `GO=/absolute/path/to/go` and `PLAYWRIGHT=/absolute/path/to/playwright` select local tooling. Install each pinned dependency list completely, in one command per prefix. The Packages trial additionally needs Engine, BEE Node and the watchers utility as its README describes, and `BEYOND_ESBUILD` pointing at this checkout after `node beyond/package.mjs`.

@@ -1,0 +1,7 @@
+{
+  "name": "@fixture/vue-app",
+  "version": "1.0.0",
+  "description": "Authored public modules with Vue single-file component source",
+  "exports": { "./main": "./main/index.ts", "./server": "./server/index.ts" },
+  "dependencies": { "vue": "3.5.43", "@headlessui/vue": "1.7.23" }
+}

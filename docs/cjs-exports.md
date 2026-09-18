@@ -2,6 +2,12 @@
 
 `cjsExports: 'assign'` is the first compiler change of this fork. It makes esbuild write the exports of an ES module as assignments on the free `exports` object when the output format is CommonJS, which is the form Beyond's runtime requires of every internal module. The default, `'getters'`, is the unchanged upstream behavior. This guide records the contract that motivated the change, the alternatives that were measured first, the emitted code, the implementation map and the limits.
 
+## Scope
+
+This option was introduced for the creator compatibility fixture. It is not automatically required for esbuild packaging, whose output does not need runtime internal modules. Assess its applicability against [execution modes](execution-modes.md) before selecting it for Packages. Keep the recorded implementation and tests; this clarification neither removes the option nor establishes that it is needed in both modes.
+
+Assessed since: the option is needed for creators consumed by the Kernel and for nothing in the packaging mode. Packaged ESM cannot use it, packaged CommonJS re-exports are live with upstream getters as well as with assigned exports, and the Packages trial builds its packaged module with upstream `esbuild` too. The evidence is in [the packaging guide](packaging.md#necessity-of-cjsexports-assign-per-path).
+
 ## The contract
 
 Beyond evaluates each internal source file as `creator(require, exports)`. Three sources define what that body must do:

@@ -2,7 +2,11 @@
 
 Beyond ESBuild evaluates how esbuild can provide syntax transformation, traversal and packaging while Beyond owns public-module composition, selected package identity and runtime update behavior. The compiler is upstream esbuild plus one bounded, opt-in change, [assigned CommonJS exports](cjs-exports.md); everything else is explicit adapters and executable cases around its public API.
 
-## Two packaging paths
+## Required execution modes
+
+[Execution modes](execution-modes.md) define the confirmed target: esbuild packaging for production and development without mandatory per-file runtime creators, and the unified Kernel/Local runtime with internal composition. Modules must support selection between them during development. HMR for the packaged path and real Packages integration still need independent evidence.
+
+## Existing fixture paths (scoped evidence)
 
 The authored path starts with several internal TypeScript files. Each is transformed alone with `format: 'cjs'` and `cjsExports: 'assign'` into a separate creator body, associated with a stable internal ID and content hash. An assembler produces a public module containing an `ims` map, dependency namespaces, export descriptors and a retained export-processing closure. Initial output creates a real Kernel `Bundle`/`Package` and calls `initialise(ims)`; update output finds the existing versioned instance and calls `update(ims)`.
 
@@ -10,7 +14,11 @@ Only the entry's intended API becomes public: the names `cjs-module-lexer` reads
 
 The external-package path starts with installed React/ReactDOM or Express source. Esbuild traverses and bundles package internals while explicit public boundaries stay external. These packages are not retroactively treated as Beyond-authored sources with per-file creators. A facade adapts known package exports and external CommonJS references to the selected delivery format. React supplies browser/client distribution and Node SSR; Express supplies Node server behavior and real HTTP tests.
 
-## Formats and adapters
+The packaging mode has its own fixtures and guide: [esbuild packaging mode](packaging.md) covers authored modules without creators, published packages, the public boundary rules that keep one state per package, and the adapters involved.
+
+The authored fixture above deliberately targets the legacy creator/runtime contract. It must not be treated as the required representation of esbuild-packaged output. The two fixture categories (authored/external) are different from the two selectable execution modes.
+
+## Existing fixture formats and adapters
 
 | Format | Native compiler capability | Beyond or assessment responsibility |
 | --- | --- | --- |

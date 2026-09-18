@@ -38,6 +38,21 @@ node beyond/express/build.mjs
 
 The creator example leaves initial artifacts, patches, source maps, the three-graph report and provenance under `.cache/example/`; React leaves ESM/System.register/CommonJS artifacts and graphs under `.cache/react/`; Express leaves Node ESM/CommonJS and graphs under `.cache/express/`, all beneath `beyond/`. The creator runner copies the selected Kernel into its isolated generated package map. Express tests bind an ephemeral loopback port, make real HTTP requests and close the server.
 
+## Packaging cases
+
+The [packaging mode](packaging.md) cases use their own pinned installation, so they never disturb the one above. Install the complete list in one command here too:
+
+```sh
+npm install --prefix beyond/.cache/ecosystem --no-save --package-lock=false vue@3.5.43 @vue/compiler-sfc@3.5.43 @vue/server-renderer@3.5.43 svelte@5.57.0 react@19.2.0 react-dom@19.2.0 @radix-ui/react-tabs@1.1.21 @headlessui/vue@1.7.23 @shoelace-style/shoelace@2.20.1 lit@3.3.3
+node --test beyond/packaging/packaging.test.mjs beyond/packaging/ecosystem.test.mjs
+node beyond/packaging/ecosystem.mjs
+PLAYWRIGHT=/absolute/path/to/playwright node beyond/packaging/verify.mjs
+```
+
+`BEYOND_ECOSYSTEM=/absolute/path` selects another directory that contains the `node_modules` of that list. `packaging.test.mjs` builds disposable authored packages and starts child Node processes that resolve only through the import maps the build wrote. `ecosystem.mjs` writes `beyond/.cache/packaging/<platform>.<environment>/` with the authored and package artifacts, `importmap.json` and the two reports; the verifier adds `browser.json` and `browser.png`, and a `browser.production.system/` tree for the System.register adapter run. `BEYOND_COHESION=off` on the verifier is the negative control of the split build and is expected to fail.
+
+`node beyond/package.mjs` lays the prepared compiler out as an unpublished, self-contained package under `beyond/.cache/npm/node_modules/esbuild`, with the native binary of this platform as its sibling package and a `beyond.json` that records revision, toolchain and binary digest. It is what the Packages trial selects by location; rerun it after `prepare.mjs`.
+
 ## Compiler checks
 
 Run these after changing Go or `lib/` sources, with the same `GOCACHE`/`GOMODCACHE` selection as preparation:

@@ -2,6 +2,10 @@
 
 Use this inventory to evaluate esbuild for Beyond's modular packaging and dependency analysis before changing the compiler. A confirmed requirement below is a Beyond contract, not a claim that esbuild implements it or must implement it in its core. The fork does not replace any installed consumer dependency.
 
+## Execution-mode scope
+
+The owner-confirmed [execution modes](execution-modes.md) take precedence over any earlier reading that imposed creators on every esbuild artifact. Production and development esbuild packaging does not require runtime internal modules. Unified Kernel/Local composition retains those internals, and development must support per-module selection between modes. R5 and R6 below describe runtime-composition compatibility, not universal requirements for esbuild packaging. Packaged-mode HMR, selection and actual Packages integration remain acceptance targets, not existing passes.
+
 ## Evidence baseline
 
 Source audit dated 2026-09-18. References are repository names, commit identifiers and repository-root paths, so they do not depend on a suite directory layout. The initial inventory was source-only. The subsequent [creator composition example](../beyond/example/README.md) executes fork-produced creators against the actual Kernel and an original consumer, with limits and results recorded separately. It does not execute the Packages service or migrate its consumers.
@@ -62,13 +66,18 @@ Status of each contract after the second delivery. "Executed" names the case tha
 
 Package resolution in P3 checks declared ranges for workspace dependencies, validates public subpaths, and allows a package to compose its own public modules without declaring a dependency on itself. An esbuild import path, file input, or output chunk alone does not contain that contract. Type-only references likewise belong to declaration analysis, not automatically to the runtime public graph; declaration generation/type checking remains outside this initial assessment.
 
+## Packaging-mode coverage
+
+The packaging mode's executed coverage, adapters and unsupported cases are recorded in [the packaging guide](packaging.md) rather than in the R-numbered table above, which describes the consumers observed in the first source audit. Summary: a packaged authored path (K1–K5), a generic published-package closure with Vue, Svelte and UI controls on browser and Node (E1–E7 and the Chromium verification), and a bounded Packages trial with the resolved compiler verified. Packaged-mode HMR, browser execution of Packages-produced packaged artifacts and the unified-runtime mode remain acceptance targets.
+
 ## Proposals to evaluate, not approved compiler changes
 
 - Implemented in `beyond/graph/` as a bounded adapter: start with metafile inputs/outputs as graph evidence. A candidate adapter can annotate internal edges with source IDs and external edges with public specifiers and import kinds. It must join separately selected package/version information rather than infer it from paths.
 - Characterized: erased unused imports (G2, F1, F2), cycles (F4) and rebuild edge removal (R1). Still to characterize before calling the graph complete: type-only imports, which need declaration analysis, and unresolved computed imports. Source relationships and emitted runtime dependencies may legitimately differ; preserve their meaning rather than merging them into one unlabeled set.
 - Keep whole-module ESM bundling and per-file creator transformation as separate experimental modes. A successful ESM bundle does not establish compatibility with mutable legacy runtime exports.
 - Consider a core fork adaptation only after an executable case exposes a needed capability unavailable through supported options, plugins, or a bounded adapter. Performance or convenience alone has no measured baseline here. One adaptation met that bar: [assigned CommonJS exports](cjs-exports.md), whose guide records the alternatives that were measured first.
-- Proposed, not approved: emit re-exports as configurable accessors plus a lexer annotation so creators that re-export can be replaced in place. It departs from the TypeScript parity Packages documents today.
+- Proposed, not approved, and scoped to runtime composition only: emit re-exports as configurable accessors plus a lexer annotation so creators that re-export can be replaced in place. It departs from the TypeScript parity Packages documents today. Re-exports were since reproduced in the packaged path through an independent consuming public module and are correct there in ESM and CommonJS ([packaging guide](packaging.md#re-exports)), so this is not a packaging requirement and the creator failure alone does not justify it as a general compiler change.
+- Proposed for the packaging mode's development updates: address rebuilt artifacts by a closure identity over the public-module graph, so public dependents of a changed module are re-addressed. Executed as a bounded fixture (K3); delivery to a running consumer and the accept or reload policy are not designed.
 
 ## Unknowns and integration gates
 

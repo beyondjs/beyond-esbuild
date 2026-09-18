@@ -1,0 +1,7 @@
+{
+  "name": "@fixture/svelte-app",
+  "version": "1.0.0",
+  "description": "Authored public modules with Svelte component source",
+  "exports": { "./main": "./main/index.js", "./server": "./server/index.js" },
+  "dependencies": { "svelte": "5.57.0" }
+}

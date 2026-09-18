@@ -23,8 +23,13 @@ export class Toolchain {
 
   get cache() { return this.#cache; }
   get dependencies() { return resolve(process.env.BEYOND_DEPENDENCIES || join(this.#cache, 'runtime/node_modules')); }
+  /** The pinned third-party packages of the packaging cases; see docs/setup.md. */
+  get ecosystem() { return resolve(process.env.BEYOND_ECOSYSTEM || join(this.#cache, 'ecosystem')); }
+  get require() { return this.#require; }
   get api() { return this.#require(join(this.#cache, 'api.cjs')); }
   get lexer() { return this.#require(join(this.dependencies, 'cjs-module-lexer')); }
+  get semver() { return this.#require(join(this.dependencies, 'semver')); }
+  get provenance() { return this.#require(join(this.#cache, 'provenance.json')); }
   get typescript() { return this.#require(join(this.dependencies, 'typescript')); }
   get kernel() { return join(this.dependencies, '@beyond-js/kernel'); }
 }

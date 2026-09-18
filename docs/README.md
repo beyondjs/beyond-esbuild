@@ -4,6 +4,8 @@ Use this repository to reproduce Beyond's compilation requirements, inspect gene
 
 The current delivery is executed fixture evidence using existing APIs and adapters plus one opt-in compiler change, [assigned CommonJS exports](cjs-exports.md); upstream behavior is unchanged when the option is off. Neither the working demo nor these passes establish complete Beyond implementation or production integration; further work must address the [remaining limits](validation.md#remaining-limits) and validate its changes.
 
+Read [execution modes](execution-modes.md) first: the esbuild packaging mode and the unified Kernel/Local runtime mode have different output/update contracts and must be selectable per module in development. Existing creator tests do not establish packaged-mode HMR or mode selection.
+
 ## Scenarios
 
 | Scenario | What it exercises | Entry point and evidence |
@@ -14,6 +16,9 @@ The current delivery is executed fixture evidence using existing APIs and adapte
 | Express distribution | Existing server package, Node CommonJS/ESM, actual POST/JSON HTTP handling, transitive dependencies and external builtins | [Express case](../beyond/express/README.md); generated `beyond/.cache/express/report.json` |
 | Dependency traversal | Three separate graphs: source files with direct, transitive, erased edges and cycles; public-module edges with importer and kind; package/version edges and diagnostics joined from manifests | [Graph contracts](beyond-architecture.md#three-graph-identities), `beyond/graph/`, authored `report.json`, external `*.graph.json` |
 | Browser composition and styles | Compiled React consumes the authored module; native ESM or actual SystemJS loader; retained-consumer patches; Kernel style registration, separate shadow-root CSS artifacts and stylesheet replacement through the Kernel change contract; dependency invalidation and failure recovery in `beyond/demo/styles.test.mjs` | [Demo commands](setup.md#browser-demo); generated `beyond/.cache/demo/browser.json` and `browser.png` |
+| esbuild packaging mode | Authored public modules bundled with bare public references and no Beyond runtime: production execution, re-exports through an independent public module in ESM and CommonJS, development re-addressing through the public graph, shared-state rules, minified source maps | [Packaging guide](packaging.md); `beyond/packaging/packaging.test.mjs` (K1–K5) |
+| Published package coverage | Pinned Vue, Svelte, Radix, Headless UI, Shoelace and Lit with React: published JavaScript, framework source adapters, conditional exports, subpaths, CommonJS input, peer dependencies, styles, minification; Node SSR and real Chromium for native ESM and the System.register adapter | [Coverage](packaging.md#package-coverage); `beyond/packaging/ecosystem.test.mjs` (E1–E7), `beyond/packaging/verify.mjs`; generated `beyond/.cache/packaging/` |
+| Packages trial | The fork selected explicitly by a new `esbuild` bundler in Packages: resolved compiler identity, per-module mode selection in both directions, production distribution, watched development rebuild and its reload boundary | [Trial record](packaging.md#packages-trial); `tests/esbuild-packaging/` in the Packages repository |
 | Compiler capabilities | Import kinds, erased-import metadata, rebuild graph changes/recovery, CJS interop/descriptors, lexer visibility and source maps | [Probe matrix](../beyond/README.md#supporting-probes), [executed validation](validation.md) |
 | Compiler regressions | Every upstream Go test package with unchanged snapshots, plus the fork's own bundler suite | [Regression record](validation.md#compiler-regression-checks) |
 
@@ -22,6 +27,7 @@ The authored runner, 25 Node tests and all 16 Go test packages have passed again
 ## Contracts and implementation references
 
 - [Requirements](requirements.md) traces current Beyond consumers, confirmed contracts, concrete acceptance cases, proposals and unknowns.
+- [esbuild packaging mode](packaging.md) records the packaged output contract, its adapters, the state hazards found by execution, re-export and update behavior, package coverage, the format assessment, the Packages trial and the remaining work.
 - [Assigned CommonJS exports](cjs-exports.md) documents the fork's compiler change: contract, measured alternatives, emitted code, implementation map and limits.
 - [Compiler audit](compiler-audit.md) maps subsystem responsibilities, actual reading coverage and potential extension points. It is not an exhaustive audit of every source line.
 - [Beyond architecture](beyond-architecture.md) explains creator composition, external packages, graph boundaries, adapters, styles and the refactoring gate.

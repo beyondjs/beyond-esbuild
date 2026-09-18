@@ -1,6 +1,8 @@
 # Executed capability evidence
 
-Two deliveries are recorded. The [second delivery](#second-delivery-compiler-change-and-remaining-contracts) is the current state: it modified the compiler, and every first-delivery result was reproduced before that change and rerun after it. The first-delivery sections are kept as the record of the unmodified upstream compiler; where they say that no compiler modification was made, they describe that delivery only. Passing fixtures and the browser demo do not establish complete Beyond implementation or production integration.
+**Scope clarification:** recorded creator/Kernel update passes establish that fixture's runtime-composition behavior. They do not validate esbuild-packaged development HMR, per-module mode selection, the unified `local-2026` integration or production adoption. See [execution modes](execution-modes.md); historical results below remain unchanged.
+
+Three deliveries are recorded. The [second delivery](#second-delivery-compiler-change-and-remaining-contracts) modified the compiler, and every first-delivery result was reproduced before that change and rerun after it. The [third delivery](#third-delivery-packaging-mode-package-coverage-and-packages-trial) changed no compiler source: it adds the esbuild packaging mode, the published-package coverage and the Packages trial. The first-delivery sections are kept as the record of the unmodified upstream compiler; where they say that no compiler modification was made, they describe that delivery only. Passing fixtures and the browser demo do not establish complete Beyond implementation or production integration.
 
 ## Compiler and environment
 
@@ -161,3 +163,57 @@ Generated evidence under `beyond/.cache/`: `example/report.json` (including `gra
 - Browser devtools and coverage tools were not exercised with the maps. Assigned exports were not exercised with minification, splitting, ES5 lowering or IIFE output; see [the option's limits](cjs-exports.md#limits).
 - CSS is plain CSS only: no Sass, Tailwind, CSS Modules or Widgets controllers.
 - Express is Node-only. The loopback server is a distribution proof, not the production CDN. No Packages service, CDN or consumer was migrated to this fork, and nothing in this delivery was pushed or published; it is committed locally on `feature/next` only.
+
+## Third delivery: packaging mode, package coverage and Packages trial
+
+Executed 2026-09-18 in the same environment: Node.js `v22.21.1`, Go `go1.27.1 darwin/arm64`, Playwright 1.62.1 with Chromium 151.0.7922.34, SystemJS 6.15.1, TypeScript 5.8.3. The checkout was at `7efe3fb4fdd10d894a04fc911fb200d4c02d8458` with this delivery's fixtures, tests and guides as working changes, committed afterwards with owner authorization in the commit that contains this record; no Go or `lib/` source changed, and `beyond/.cache/provenance.json` was regenerated at that revision before the runs. Contracts, findings and limits are in [the packaging guide](packaging.md); this section is the run record. None of it is acceptance of the unified-runtime mode, and the creator cases above remain legacy Kernel evidence only.
+
+### Commands and results
+
+```sh
+node beyond/prepare.mjs && node beyond/package.mjs
+go vet ./internal/... ./pkg/... ./cmd/...
+go test -count=1 ./internal/... ./pkg/... ./cmd/...
+node beyond/example/run.mjs
+node --test beyond/capabilities.test.mjs beyond/example/creators.test.mjs beyond/graph/graph.test.mjs \
+  beyond/demo/styles.test.mjs beyond/react/react.test.mjs beyond/express/express.test.mjs \
+  beyond/packaging/packaging.test.mjs beyond/packaging/ecosystem.test.mjs
+node beyond/demo/build.mjs && PLAYWRIGHT=/absolute/path/to/playwright node beyond/demo/verify.mjs
+PLAYWRIGHT=/absolute/path/to/playwright node beyond/packaging/verify.mjs
+```
+
+| Check | Result |
+| --- | --- |
+| `go vet`, every Go test package | Clean; 16 of 16 packages `ok`, upstream snapshots unchanged |
+| Second-delivery runner, Node tests and demo verification | Runner `PASS`; the 25 earlier tests pass; Chromium ESM and SystemJS demo `PASS` |
+| `packaging.test.mjs` | 5 of 5 (K1–K5) |
+| `ecosystem.test.mjs` | 7 of 7 (E1–E7) |
+| `beyond/packaging/verify.mjs` | `PASS browser.production native ESM`, `PASS browser.development native ESM`, `PASS browser.production System.register adapter + SystemJS`; 85 module requests each, no failed request, no page or console error |
+| Negative control `BEYOND_COHESION=off` | Fails as expected: the page never becomes ready, `Cannot read properties of undefined (reading 'call')` |
+| Packages trial, `tests/esbuild-packaging/index.mjs` in the Packages checkout | 7 of 7 steps; compiler reported as `0.28.2`, fork revision `7efe3fb4`, `assigned: true`, against the installed `0.25.9` |
+| Packages stage-1 validation | 21 of 21 before the Packages changes and after them, and again, with the trial at 7 of 7, after the suite fixture moved to `testbed/module-updates/`. One intermediate run reported 20 of 21: its recovery step waits for two filesystem events inside a fixed window; it passed again with no change |
+
+### Cases
+
+| Case | Established |
+| --- | --- |
+| K1 | A packaged public module, its facade and its value module execute in a process that cannot resolve any Beyond runtime; the consumer's only reference is the bare public specifier; its internal files are inputs only |
+| K2 | Star, named, default and internal re-exports of a reassigned binding are live through an independent consuming public module in native ESM, native CommonJS and assigned CommonJS |
+| K3 | Content-only identity leaves the re-exporting module's address unchanged after a dependency edit; the closure identity re-addresses the changed module and its public dependents and nothing else; a new import observes the change; the loaded consumer does not, and both generations keep separate state |
+| K4 | A relative import of another public entry of the package becomes a public reference with one state; a shared file that is not public is copied into both modules, asserted as a limit |
+| K5 | The external map of the minified artifact resolves a throw to `main/index.ts:8:9` |
+| E1–E2 | Vue SFC with a Headless UI control and a Svelte component render on Node from packaged artifacts |
+| E3 | Conditional exports follow platform and environment, read from reports and executed through `esm-env` |
+| E4 | CommonJS inputs use named adapters; more than 60 ESM artifacts use none; Vue's public star re-export stays native |
+| E5 | Over 100 package edges per target are declared and satisfied; nothing unsupported; no import-map scope needed |
+| E6 | Svelte and Shoelace subpaths come from one split build per package; a published sibling is a reference |
+| E7 | Production artifacts are less than half the development bytes |
+
+### Remaining limits of this delivery
+
+- No update reaches a running consumer in the packaging mode. Rebuild, re-addressing and the reload boundary are executed; notification, delivery, replacement, style replacement, ordering and rollback do not exist. A successful rebuild is not HMR.
+- The Packages trial is Node only and unreviewed; it is committed locally in Packages as `dbfd08f`. Its bundler compiles one module at a time: it has no closure identity, no cohesion pass, no framework or CommonJS adapters and no published-package distribution. Packaged artifacts produced by Packages were not executed in a browser.
+- Per-module selection was executed for two modules in both directions. Switching the mode of a module that is already running is unspecified. The unified runtime (`local-2026`) was not involved: composed modules ran on the legacy Kernel.
+- Package coverage is the pinned list. The unsupported and uncovered cases are listed in [the packaging guide](packaging.md#package-coverage). Import-map scopes for nested versions are implemented but no installed tree exercised them.
+- The System.register adapter run does not chain source maps. IIFE output was not exercised. The upstream JavaScript, WASM and end-to-end scripts were again not run; they are unaffected by this delivery, which changes no compiler source.
+- Nothing was pushed or published, and no consumer was migrated. The fork, Packages and suite changes are local commits on `feature/next`.
