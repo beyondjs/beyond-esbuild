@@ -60,6 +60,7 @@ export class Server {
     const kernel = system ? 'sjs.js' : 'browser.mjs';
     const imports = {
       react: `/artifacts/react/react.${suffix}`,
+      'react/jsx-runtime': `/artifacts/react/react-jsx-runtime.${suffix}`,
       'react-dom': `/artifacts/react/react-dom.${suffix}`,
       'react-dom/client': `/artifacts/react/react-dom-client.${suffix}`,
       '@fixture/app/main': `/cdn/${format}/app.js`,

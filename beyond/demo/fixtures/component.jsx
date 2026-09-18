@@ -21,6 +21,7 @@ class Component extends React.Component {
       <button data-testid="patch" disabled={this.#patched} onClick={async () => {
         await this.props.patch(); this.#patched = true; this.forceUpdate();
       }}>Apply Beyond patch</button>
+      <button data-testid="restyle" onClick={() => this.props.restyle()}>Re-adopt module CSS</button>
     </section>;
   }
 }
@@ -35,11 +36,14 @@ class Demo {
     const app = styles.register(__beyond_pkg.vspecifier);
     const dependency = styles.register(shared.vspecifier);
     await Promise.all([this.#adopt(root, app.href), this.#adopt(control, dependency.href)]);
+    // The Kernel versions the href on change; adopting it replaces the module stylesheet.
+    app.on('change', () => this.#adopt(root, app.href));
+    dependency.on('change', () => this.#adopt(control, dependency.href));
     const container = document.createElement('div');
     root.append(container);
     const patch = () => format === 'system'
       ? System.import('/cdn/system/patch.js') : import('/cdn/esm/patch.js');
-    createRoot(container).render(<Component format={format === 'esm' ? 'Native ESM' : 'SystemJS'} patch={patch} />);
+    createRoot(container).render(<Component format={format === 'esm' ? 'Native ESM' : 'SystemJS'} patch={patch} restyle={() => app.change()} />);
     control.innerHTML += '<p class="probe">Shared module · independently scoped CSS</p>';
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     globalThis.__demo = { ready: true, format, css: [app.href, dependency.href],
@@ -51,7 +55,10 @@ class Demo {
     return new Promise((resolve, reject) => {
       const link = document.createElement('link');
       link.rel = 'stylesheet'; link.href = href;
-      link.onload = resolve; link.onerror = () => reject(new Error(`Could not load module CSS: ${href}`));
+      const previous = [...root.querySelectorAll('link[rel=stylesheet]')];
+      // The earlier stylesheet stays applied until its replacement has loaded.
+      link.onload = () => { previous.forEach(item => item.remove()); resolve(); };
+      link.onerror = () => { link.remove(); reject(new Error(`Could not load module CSS: ${href}`)); };
       root.append(link);
     });
   }

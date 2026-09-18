@@ -42,20 +42,37 @@ CDN's esbuild path (C1) requests bundled ESM, but its selected plugin's resolve/
 
 R1–R4 are the first graph/composition priorities. R5–R7 determine whether candidate output can participate in the current development model. R8–R9 prevent apparently successful builds from losing debugging or selection information.
 
-The executable example covers a bounded slice of R1, R3, R5 and R6: separate creator bodies and hashes, classified internal/public edges, independent bare shared-module import, entry-only exports, and a patch applied to the original runtime package and consumer. It also demonstrates that `cjs-module-lexer@2.1.0` returns no export names for the fixture's esbuild CommonJS helper pattern; emitted ESM metadata supplies those names in this adapter. This is not full satisfaction of the broader matrix.
+## Executed coverage
+
+Status of each contract after the second delivery. "Executed" names the case that asserts it; every case is bounded by its fixture. Commands and results are in [validation](validation.md).
+
+| ID | Executed | Still open |
+| --- | --- | --- |
+| R1 | `beyond/graph/graph.test.mjs` F1–F3 and the example report: relative edges internal, bare and same-package public edges separate, versions attached from manifests with Packages' diagnostics | The real Packages workspace resolver is not invoked; the mirror selects nothing |
+| R2 | F2: static, literal dynamic and literal `require` bare references keep importer and kind; G1: re-export and same-package subpath stay external | Computed specifiers; final graph schema and dynamic-edge policy |
+| R3 | L3 and the example: entry-only API, internal star re-exports contribute names except `default`, shared module independently addressable | — |
+| R4 | React/Express facades and C1 | P1's default-only import assumption was characterized, not changed |
+| R5 | Example run: one changed source, stable IDs, unchanged hashes and retained state; L6: added internal module | Removed internal modules stay registered in the Kernel (K1) |
+| R6 | [Assigned CommonJS exports](cjs-exports.md): L1 live reassigned exports, L2 defaults, delete/refill across updates; H1 keeps the upstream descriptor finding | Re-exports are non-configurable accessors: L3, L4 |
+| R7 | R1 probe; L6 failed compile publishes nothing and recovers; Y1 for stylesheets | Filesystem watching, transport, stale asynchronous publication |
+| R8 | M1: Node resolves creator positions through composed ESM and CommonJS maps, including a non-ASCII source; System.register map decoded; S1 | Browser devtools and coverage-tool consumption |
+| R9 | React is built separately for node and browser, Express for node only, each recorded in its report | Beyond module-manifest conditional selection; P1's platform mismatch |
+
+`cjs-module-lexer@2.1.0` returns no names for upstream getter output, names and star re-exports for upstream's `platform: 'node'` annotation, and all of them for assigned exports (probe X1). The example uses the lexer as Packages does and cross-checks esbuild's ESM metadata. This is not full satisfaction of the broader matrix.
 
 Package resolution in P3 checks declared ranges for workspace dependencies, validates public subpaths, and allows a package to compose its own public modules without declaring a dependency on itself. An esbuild import path, file input, or output chunk alone does not contain that contract. Type-only references likewise belong to declaration analysis, not automatically to the runtime public graph; declaration generation/type checking remains outside this initial assessment.
 
 ## Proposals to evaluate, not approved compiler changes
 
-- Start with plugin resolve/load observations and metafile inputs/outputs as graph evidence. A candidate adapter can annotate internal edges with source IDs and external edges with public specifiers and import kinds. It must join separately selected package/version information rather than infer it from paths.
-- Characterize tree-shaken and type-only imports, unresolved computed imports, cycles, and rebuild edge removal before calling the graph complete. Source relationships and emitted runtime dependencies may legitimately differ; preserve their meaning rather than merging them into one unlabeled set.
+- Implemented in `beyond/graph/` as a bounded adapter: start with metafile inputs/outputs as graph evidence. A candidate adapter can annotate internal edges with source IDs and external edges with public specifiers and import kinds. It must join separately selected package/version information rather than infer it from paths.
+- Characterized: erased unused imports (G2, F1, F2), cycles (F4) and rebuild edge removal (R1). Still to characterize before calling the graph complete: type-only imports, which need declaration analysis, and unresolved computed imports. Source relationships and emitted runtime dependencies may legitimately differ; preserve their meaning rather than merging them into one unlabeled set.
 - Keep whole-module ESM bundling and per-file creator transformation as separate experimental modes. A successful ESM bundle does not establish compatibility with mutable legacy runtime exports.
-- Consider a core fork adaptation only after an executable case exposes a needed capability unavailable through supported options, plugins, or a bounded adapter. Performance or convenience alone has no measured baseline here.
+- Consider a core fork adaptation only after an executable case exposes a needed capability unavailable through supported options, plugins, or a bounded adapter. Performance or convenience alone has no measured baseline here. One adaptation met that bar: [assigned CommonJS exports](cjs-exports.md), whose guide records the alternatives that were measured first.
+- Proposed, not approved: emit re-exports as configurable accessors plus a lexer annotation so creators that re-export can be replaced in place. It departs from the TypeScript parity Packages documents today.
 
 ## Unknowns and integration gates
 
-The final graph API, schema, identity normalization, computed-import policy and desired reverse-dependency invalidation are not settled by these sources. No benchmark or memory target was provided. No need for a broad parser/resolver rewrite has been demonstrated.
+The final graph API, schema, identity normalization, computed-import policy and desired reverse-dependency invalidation are not settled by these sources. No benchmark or memory target was provided. No need for a broad parser/resolver rewrite has been demonstrated; the one compiler change is confined to CommonJS export emission in the linker and printer.
 
 Kernel currently invalidates changed creators by hash, retains unchanged creators, and does not delete missing internal entries (K1). Rebuilding output cannot establish transitive reevaluation, atomic rollback, disposal, export-shape changes or preservation of every captured value. Final runtime naming and migration contracts remain open (S1). A future HMR claim needs the same live consumer to observe updates through original imports, with identity, update order, errors and cleanup asserted.
 

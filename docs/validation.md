@@ -1,6 +1,6 @@
 # Executed capability evidence
 
-This record covers preparation and bounded API/adapter tests. No compiler-core modifications were made. Passing fixtures and the browser demo do not establish complete Beyond implementation or production integration.
+Two deliveries are recorded. The [second delivery](#second-delivery-compiler-change-and-remaining-contracts) is the current state: it modified the compiler, and every first-delivery result was reproduced before that change and rerun after it. The first-delivery sections are kept as the record of the unmodified upstream compiler; where they say that no compiler modification was made, they describe that delivery only. Passing fixtures and the browser demo do not establish complete Beyond implementation or production integration.
 
 ## Compiler and environment
 
@@ -27,7 +27,7 @@ Three constraints are demonstrated by expected-limitation assertions: unused Typ
 
 No Packages application acceptance, CDN integration, browser HMR, watcher lifecycle, source-map position accuracy after wrapping, performance target or consumer migration is claimed by this run. The creator example records its own runtime evidence separately.
 
-## Upstream regression checks
+## Upstream regression checks (first delivery)
 
 Executed against the same unchanged compiler and temporary Go caches. Portable equivalent with the selected Go toolchain on `PATH`:
 
@@ -38,7 +38,7 @@ go test \
 
 Result: **all five Go test packages passed**. These exercise upstream bundling, JavaScript parsing/printing, public Go API behavior and the executable entrypoint. This is a bounded regression run, not the full upstream test matrix or cross-platform certification.
 
-## Final integrated run
+## Final integrated run (first delivery)
 
 The pinned isolated dependency installation was executed, including Kernel 0.1.12, cjs-module-lexer 2.1.0, TypeScript 5.8.3, React/ReactDOM 19.2.0, SystemJS 6.15.1 and Express 5.1.0. Final commands from the fork root:
 
@@ -62,7 +62,9 @@ Result: **authored CommonJS/ESM runner passed; 12 Node tests passed, 0 failed/sk
 
 Inspect generated evidence under `beyond/.cache/`: `example/report.json`, `react/report.json` and `*.graph.json`, `express/report.json` and `*.graph.json`, `demo/styles.graph.json`, `demo/browser.json`, `demo/browser.png`, and `demo/mobile.png`. The desktop screenshot was visually inspected. The verifier starts and closes its own HTTP server/browser. A separate `node beyond/demo/server.mjs` session serves the page for manual inspection.
 
-## Remaining implementation boundaries
+## Remaining implementation boundaries (first delivery)
+
+This ledger is what the second delivery started from; its outcome per row is in [ledger outcome](#ledger-outcome).
 
 ### Reproduced failures, fixture adaptations and open gaps
 
@@ -77,6 +79,85 @@ The new implementation agent has substantive work: reproduce the baseline, exten
 
 These required fixture paths work through the public fork API plus explicit adapters; no core fix was necessary to pass them. SystemJS is TypeScript envelope conversion, not a native esbuild output. Creator export copying has snapshot limits for arbitrary later mutations. Complete cycles, default/star re-export policies, export-shape changes, automatic HMR/watch transport, lifecycle/rollback, composed source-map positions, general package-version solving, Sass/Tailwind and CSS replacement/recovery remain unvalidated. Express is Node-only. The simple loopback server is a distribution proof, not production CDN integration. Necessary future compiler fixes are authorized when concrete cases establish the need; no blanket compatibility guarantee is made.
 
-## Documentation and repository checks
+## Documentation and repository checks (first delivery)
 
 An independent final documentation consistency review found no required corrections. All 63 local links/anchors checked in the Beyond-authored fork guides resolved. First-party JavaScript modules passed syntax checks, all new source files were below 300 lines and whitespace checks passed. The upstream introduction body was compared to the base README: it is preserved with adjusted image paths and a provenance preface. Compiler implementation and license files remain unchanged. These checks validate this delivery's organization and provenance, not exhaustive upstream source correctness.
+
+## Second delivery: compiler change and remaining contracts
+
+Executed 2026-09-18 in the same environment: Node.js `v22.21.1`, Go `go1.27.1 darwin/arm64`, Playwright 1.62.1 with Chromium 151.0.7922.34. The checkout was at `4559612a348fd0aa3d49a60e2bef6ed674852d45`, the first delivery committed on top of upstream `f6058f83`. The compiler and fixture changes of this delivery were uncommitted working changes at execution time, so the recorded `beyond/.cache/provenance.json` named that commit and not the modified sources. They were committed afterwards with owner authorization: the compiler change as `6241fc5ab536419a293529b85a05cf4f0e191fbf`, then the fixtures, tests and guides in the commit that contains this record. The final rerun before committing, after factoring one duplicated condition in `internal/linker/cjs_assign_exports.go`, gave the same results. The dependency installation added `semver@7.5.4` to the pinned list.
+
+The first-delivery baseline was reproduced first, unchanged: runner passed, 12 of 12 Node tests, Chromium ESM and SystemJS.
+
+### Ledger outcome
+
+| First-delivery row | Outcome |
+| --- | --- |
+| Lexer reports no exports for esbuild CommonJS | **Resolved.** [Assigned CommonJS exports](cjs-exports.md) are lexer-readable, including default, named and star re-exports (X1, L2, L3). Separately observed: upstream's `platform: 'node'` annotation already exposes names and star re-exports for getter output |
+| Getter exports reject the delete/refill creator model; values were copied as snapshots | **Resolved by a compiler change**, after a copying adapter, a getter adapter and a second TypeScript pass were each shown insufficient. Live reassigned exports, defaults and updates are executed (L1, L2, L6). Re-exports keep TypeScript's accessor boundary (L3, L4) |
+| System.register is not an esbuild format | **Unchanged: still an explicit TypeScript adapter**, executed by the real SystemJS loader in Chromium. New: its source map is chained to the original sources (M1). No native support is claimed or was attempted |
+| External CommonJS `require` in ESM needs adaptation | **Unchanged: explicit facades.** Extended to `react/jsx-runtime`, consumed by the browser demo and SSR. Computed requires and other export shapes remain open |
+
+No reproduction of an owner-reported conflict other than these rows exists in the repository, so none beyond them was addressed.
+
+### Compiler regression checks
+
+```sh
+go vet ./internal/linker ./internal/js_printer ./internal/runtime ./internal/config ./pkg/api ./pkg/cli
+go test -count=1 ./internal/... ./pkg/... ./cmd/...
+node beyond/.cache/runtime/node_modules/typescript/bin/tsc -noEmit -p lib/tsconfig.json \
+  --typeRoots beyond/.cache/lib-types/node_modules/@types
+```
+
+Result: **vet clean; all 16 Go packages that have tests passed uncached**, including `internal/bundler_tests` with every upstream snapshot unchanged plus the fork's three `TestBeyond*` cases; `lib/` type-checks; `gofmt -l` lists none of the changed files. An intermediate placement of the new runtime helper changed the chunk hashes of two upstream splitting snapshots; the helper was moved rather than the snapshots refreshed. Not run: upstream `scripts/` JavaScript API, plugin, end-to-end, source-map, WASM, browser and Yarn PnP suites, other operating systems and `make` targets. The type check used TypeScript 5.8.3, not upstream's pinned 6.0.2.
+
+### Node and browser run
+
+```sh
+node beyond/prepare.mjs
+node beyond/example/run.mjs
+node --test beyond/capabilities.test.mjs beyond/example/creators.test.mjs beyond/graph/graph.test.mjs \
+  beyond/demo/styles.test.mjs beyond/react/react.test.mjs beyond/express/express.test.mjs
+node beyond/demo/build.mjs
+PLAYWRIGHT=/absolute/path/to/playwright node beyond/demo/verify.mjs
+```
+
+Result: **authored runner passed; 25 Node tests passed, 0 failed, 0 skipped; real Chromium passed both formats.**
+
+### Creator contract cases
+
+All against the actual `@beyond-js/kernel@0.1.12`, creators compiled by the fork with `cjsExports: 'assign'`, consumed as ESM and CommonJS from disposable packages.
+
+| Case | Executed assertion |
+| --- | --- |
+| L1 | `count++` in one creator is read live by another, and an assignment to a public `let` reaches the original ESM namespace and CommonJS object |
+| L2 | A default class crosses creators; a public default function is replaced by an update in both module systems |
+| L3 | `export *` and named re-exports of internals define the public API, excluding `default`; a re-exported binding is a live accessor internally but is not pushed to the public binding |
+| L4 | Replacing a creator that re-exports throws `TypeError` in the Kernel and leaves the loaded value untouched: the boundary TypeScript output has |
+| L5 | The Kernel rejects a cycle between internal modules with its recursive-load trace |
+| L6 | An update adds an internal module while an untouched one keeps its state; a source that does not compile produces no update; sequential updates arrive in order with one `change` event each; a loaded ES module does not gain a new export although the runtime holds its value |
+| M1 | Child Node processes with `--enable-source-maps` report `nested/fail.ts:4:9` and `index.ts:2` for an error thrown inside a creator, through the published ESM and CommonJS maps, with a non-ASCII line before the code; the chained System.register map resolves the same statement to zero-based line 3, column 2, with `sourcesContent` |
+
+### Other acceptance slices
+
+| Slice | Executed result |
+| --- | --- |
+| Compiler option | X1: the lexer reads assigned exports and the star re-export; upstream getters yield nothing; a non-CommonJS format is rejected. Go snapshots cover convert-format, bundle and CommonJS-source entries |
+| Authored example | The public module holds four creators, no `module.exports` and no getter helpers; lexer names equal ESM metadata names; maps are emitted for `.mjs`, `.cjs` and `.system.js`; patches 42 -> 43 keep identity and state in both module systems |
+| Three graphs | F1 direct, transitive and erased file edges; F2 public edges with importer, kind, lazy flag, same-package subpath and an erased bare import; F3 `builtin`/`external`/`workspace`/own classification, a single package edge, and `DEPENDENCY_INCOMPATIBLE`, `DEPENDENCY_NOT_DECLARED`, `MODULE_NOT_FOUND`; F4 cycle report; G2 the metafile erased-import finding |
+| React | SSR in a fresh process through the packaged `react/jsx-runtime`, loading only built files; package edges `react-dom -> react` (peer, `^19.2.0`, public) and `react-dom -> scheduler` (`^0.27.0`, bundled), both satisfied; four System.register artifacts |
+| Express | Real HTTP JSON POST in CommonJS and ESM; more than 20 transitive package edges, each declared and satisfied by the installed version |
+| Modular CSS | Y1: a palette change invalidates only the importing module, the independent stylesheet stays byte-identical, a missing import keeps the last good artifact and graph, a fix recovers. Browser: after a rebuild, the Kernel `change()` contract requests `app.css?version=1`, the app shadow root becomes `rgb(122, 31, 92)`, shared and document colors are unchanged, and one stylesheet link remains |
+| Browser | Both formats render React 19.2.0 through the packaged JSX runtime, update state, apply the creator patch 42 -> 43 with counter 1 -> 2, with no page errors, no failed responses and no horizontal overflow at 390px. The desktop screenshot was inspected |
+
+Generated evidence under `beyond/.cache/`: `example/report.json` (including `graphs`), `example/node_modules/@fixture/app/main.{mjs,cjs,system.js}` with their `.map` files, `example/patch.*`, `react/report.json` and `*.graph.json` (with `packageEdges`), `express/report.json` and `*.graph.json`, `demo/styles.graph.json`, `demo/browser.json`, `demo/browser.png` and `demo/mobile.png`. The verifier restores the pristine stylesheets when it finishes.
+
+### Remaining limits
+
+- Re-exports in creators are not pushed to public bindings and are not replaceable in place (L3, L4). A proposal is recorded in [requirements](requirements.md#proposals-to-evaluate-not-approved-compiler-changes); nothing was approved.
+- Public shape changes require a reload, removed internal modules stay registered in the Kernel, and the Kernel rejects cycles. These are runtime contracts, asserted rather than changed.
+- Updates are applied by importing a patch explicitly. No filesystem watcher, notification transport, reconnect, rollback, disposal or stale asynchronous publication is implemented or claimed, and only the demo control calls `change()` on a stylesheet.
+- Graphs omit `import type` and computed specifiers. The package graph mirrors Packages' validation over explicit manifests and installed versions; it selects and solves nothing.
+- Browser devtools and coverage tools were not exercised with the maps. Assigned exports were not exercised with minification, splitting, ES5 lowering or IIFE output; see [the option's limits](cjs-exports.md#limits).
+- CSS is plain CSS only: no Sass, Tailwind, CSS Modules or Widgets controllers.
+- Express is Node-only. The loopback server is a distribution proof, not the production CDN. No Packages service, CDN or consumer was migrated to this fork, and nothing in this delivery was pushed or published; it is committed locally on `feature/next` only.

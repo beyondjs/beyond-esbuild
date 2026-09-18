@@ -8,6 +8,8 @@ const cache = resolve(root, 'beyond/.cache');
 process.env.ESBUILD_BINARY_PATH = resolve(cache, 'esbuild');
 const require = createRequire(resolve(cache, 'runtime/package.json'));
 const compiler = require(resolve(cache, 'api.cjs'));
+const { Installed } = await import('../graph/installed.mjs');
+const installed = new Installed(require('semver'), root);
 
 /** Packages Express for Node; browser emulation is outside its server contract. */
 export class ExpressBuild {
@@ -56,7 +58,7 @@ export class ExpressBuild {
           else queue.push(edge.path);
         }
       }
-      writeFileSync(resolve(this.#output, `${format}.graph.json`), JSON.stringify({ files, packages,
+      writeFileSync(resolve(this.#output, `${format}.graph.json`), JSON.stringify({ files, packages, packageEdges: installed.edges(files),
         traversal: { entry: '<stdin>', files: [...reachable].sort(), external: [...externals].sort() },
         outputs: result.metafile.outputs, warnings: result.warnings,
         note: 'Node builtins remain external. Installed dependency package versions are recorded separately from file edges. Computed view-engine requires are not statically resolved.' }, null, 2));

@@ -4,9 +4,13 @@ import { fileURLToPath as filename, pathToFileURL as url } from 'node:url';
 import { resolve, join } from 'node:path';
 import { mkdir, readFile as read, writeFile as write, cp, rm } from 'node:fs/promises';
 import { createHash as hash } from 'node:crypto';
+import { readFileSync as readSync } from 'node:fs';
 import { Compiler } from './compiler.mjs';
 import { Assembler } from './assembler.mjs';
 import { Formats } from './formats.mjs';
+import { Traversal } from '../graph/traversal.mjs';
+import { Packages } from '../graph/packages.mjs';
+import { Graph } from '../graph/graph.mjs';
 
 /** Builds inspectable artifacts and verifies them against the actual installed Kernel. */
 class Example {
@@ -18,16 +22,17 @@ class Example {
   #runtime;
   #formats;
   #graph;
+  #graphs;
 
   /** Executes the bounded vertical fixture and retains generated output for inspection. */
   async run() {
     process.env.ESBUILD_BINARY_PATH = join(this.#cache, process.platform === 'win32' ? 'esbuild.exe' : 'esbuild');
     const api = require(import.meta.url)(join(this.#cache, 'api.cjs'));
-    this.#compiler = new Compiler(api);
     const dependencies = resolve(process.env.BEYOND_DEPENDENCIES || join(this.#cache, 'runtime/node_modules'));
     this.#formats = new Formats(api, require(import.meta.url)(join(dependencies, 'typescript')));
     this.#lexer = require(import.meta.url)(join(dependencies, 'cjs-module-lexer'));
     await this.#lexer.init();
+    this.#compiler = new Compiler(api, this.#lexer);
     this.#runtime = join(dependencies, '@beyond-js/kernel');
     const manifest = JSON.parse(await read(join(this.#runtime, 'package.json'), 'utf8'));
     assert.equal(manifest.version, '0.1.12', 'This compatibility probe pins the real Kernel 0.1.12');
@@ -38,7 +43,7 @@ class Example {
     await rm(link, { recursive: true, force: true });
     await cp(this.#runtime, link, { recursive: true });
     const shared = await this.#compiler.compile(join(this.#output, 'sources/shared'), ['index.ts']);
-    await this.#package('shared', 'message', new Assembler('@fixture/shared@1.0.0/message', shared).emit());
+    await this.#package('shared', 'message', new Assembler('@fixture/shared@1.0.0/message', shared).assemble());
     const initial = await this.#build();
     this.#graph = await this.#compiler.graph(join(this.#output, 'sources/app'));
     assert.deepEqual(Object.keys(this.#graph.inputs).sort(), ['counter.ts', 'decoration.ts', 'format.ts', 'index.ts']);
@@ -52,8 +57,19 @@ class Example {
       ['@fixture/shared/message'], 'Public dependency stays separate from internal-source edges');
     assert.deepEqual((await this.#build()).map(item => item.hash), initial.map(item => item.hash),
       'Repeated unchanged compilation produces stable hashes');
-    const emitted = new Assembler('@fixture/app@1.0.0/main', initial).emit();
-    await this.#package('app', 'main', emitted);
+    const assembled = new Assembler('@fixture/app@1.0.0/main', initial).assemble();
+    const emitted = assembled.code;
+    await this.#package('app', 'main', assembled);
+    const manifests = ['app', 'shared'].map(name => JSON.parse(
+      readSync(join(this.#output, `node_modules/@fixture/${name}/package.json`), 'utf8')));
+    this.#graphs = new Graph(await new Traversal(api, join(this.#output, 'sources/app')).run(),
+      new Packages(require(import.meta.url)(join(dependencies, 'semver')), manifests), '@fixture/app', '@fixture/app/main').report;
+    assert.deepEqual(this.#graphs.packages.errors, []);
+    assert.deepEqual(this.#graphs.packages.edges, [{ from: '@fixture/app', to: '@fixture/shared@1.0.0', range: '1.0.0' }]);
+    assert.deepEqual(this.#graphs.files.nodes.find(node => node.id === 'index.ts').transitive,
+      ['counter.ts', 'decoration.ts', 'format.ts']);
+    assert.equal(emitted.includes('module.exports'), false, 'Creators assign on the runtime exports object directly');
+    assert.equal(emitted.includes('__defProp'), false, 'Assigned exports need no per-creator getter helpers');
     assert.match(emitted, /import \* as dependency_0 from "@fixture\/shared\/message"/);
     assert.equal((emitted.match(/creator: function\(require, exports\)/g) || []).length, 4);
     assert.equal(emitted.includes('Hello Beyond'), false, 'Shared implementation is not flattened into app');
@@ -72,14 +88,15 @@ class Example {
     const identity = cjs.__beyond_pkg;
     const app = await import(url(join(this.#output, 'node_modules/@fixture/app/main.mjs')));
     assert.deepEqual(Object.keys(app).sort(), ['__beyond_pkg', 'answer', 'hmr', 'main', 'runs']);
-    assert.deepEqual(this.#lexer.parse(initial[0].original).exports, [],
-      'Current esbuild helper-based exports are not recognized by cjs-module-lexer');
+    assert.deepEqual([...initial[0].exports].sort(), [...initial[0].metadata].sort(),
+      'cjs-module-lexer reads the assigned exports of the fork and agrees with esbuild ESM metadata');
     const entry = join(this.#output, 'sources/app/index.ts');
     await write(entry, (await read(entry, 'utf8')).replace('answer = 42', 'answer = 43'));
     const changed = await this.#build();
     assert.notEqual(initial[0].hash, changed[0].hash);
     assert.deepEqual(initial.slice(1).map(item => item.hash), changed.slice(1).map(item => item.hash));
-    await this.#formats.emit(this.#output, 'patch', new Assembler('@fixture/app@1.0.0/main', changed).emit(true));
+    const patch = new Assembler('@fixture/app@1.0.0/main', changed).assemble(true);
+    await this.#formats.emit(this.#output, 'patch', patch.code, patch.map);
     await import(url(join(this.#output, 'patch.mjs')));
     assert.equal(consumer.read().answer, 43, 'Original consumer receives updated live public binding');
     assert.equal(consumer.read().package, before.package, 'Runtime package identity is retained');
@@ -98,13 +115,13 @@ class Example {
     return this.#compiler.compile(join(this.#output, 'sources/app'), ['index.ts', 'format.ts', 'counter.ts', 'decoration.ts']);
   }
 
-  async #package(name, subpath, code) {
+  async #package(name, subpath, { code, map }) {
     const root = join(this.#output, `node_modules/@fixture/${name}`);
     await mkdir(root, { recursive: true });
     await write(join(root, 'package.json'), JSON.stringify({ name: `@fixture/${name}`, version: '1.0.0',
       type: 'module', exports: { [`./${subpath}`]: { import: `./${subpath}.mjs`, require: `./${subpath}.cjs` } },
       ...(name === 'app' ? { dependencies: { '@fixture/shared': '1.0.0' } } : {}) }, null, 2));
-    await this.#formats.emit(root, subpath, code);
+    await this.#formats.emit(root, subpath, code, map);
   }
 
   async #findings(internals, version, dependencies) {
@@ -113,22 +130,19 @@ class Example {
     await write(join(this.#output, 'report.json'), JSON.stringify({
       esbuild: version, kernel: '0.1.12', kernelPath: this.#runtime,
       kernelSha256: hash('sha256').update(binary).digest('hex'), lexer: lexer.version,
+      compilerOption: "cjsExports: 'assign' (fork-specific; creators assign on the runtime exports object)",
       adapters: { commonjs: 'esbuild transform of composed envelope', systemjs: `TypeScript ${this.#formats.version} System.register` },
       traversal: this.#graph,
       emittedMetadata: internals.map(({ id, exports, imports, hash }) => ({ id, exports, imports, hash })),
-      internalEdges: Object.entries(this.#graph.inputs).flatMap(([file, input]) => input.imports.filter(edge => !edge.external)
-        .map(edge => ({ from: './' + file.replace(/\.ts$/, ''), to: './' + edge.path.replace(/\.ts$/, ''), kind: edge.kind }))),
-      publicEdges: Object.entries(this.#graph.inputs).flatMap(([file, input]) => input.imports.filter(edge => edge.external)
-        .map(edge => ({ from: '@fixture/app/main', source: './' + file.replace(/\.ts$/, ''), to: edge.path, kind: edge.kind }))),
-      packageEdges: [{ from: '@fixture/app@1.0.0', to: '@fixture/shared@1.0.0',
-        evidence: 'Fixture package manifests; no general version solver is implemented' }],
-      lexerExports: this.#lexer.parse(internals[0].original).exports,
-      metadataExports: internals[0].exports,
+      graphs: this.#graphs,
+      lexerExports: internals[0].exports,
+      metadataExports: internals[0].metadata,
       checks: ['four creators', 'bare shared reference', 'entry-only exports', 'real Kernel execution',
         'same package identity after patch', 'original consumer live binding', 'unchanged internal hashes',
         'unchanged internal static state retained', 'deterministic repeated hashes',
         'internal edges separated from bare public dependency', 'native transitive esbuild file traversal',
-        'actual Node CommonJS require', 'CommonJS live patch with retained identity'],
+        'actual Node CommonJS require', 'CommonJS live patch with retained identity',
+        'lexer names equal ESM metadata names', 'composed source maps emitted for every format'],
       systemjs: 'Emitted for browser integration; this runner alone does not execute a browser'
     }, null, 2) + '\n');
   }

@@ -2,6 +2,7 @@ import { createRequire as require } from 'node:module';
 import { fileURLToPath as filename } from 'node:url';
 import { join } from 'node:path';
 import { mkdir, readFile as read, writeFile as write } from 'node:fs/promises';
+import { Styles } from './styles.mjs';
 
 /** Compiles the visible React consumer and separate CSS artifacts using this fork. */
 class Build {
@@ -17,22 +18,18 @@ class Build {
     await mkdir(output, { recursive: true });
     for (const name of ['component', 'config']) {
       const source = await read(join(this.#root, 'fixtures', `${name}.${name === 'component' ? 'jsx' : 'js'}`), 'utf8');
-      const esm = await api.transform(source, { loader: 'jsx', format: 'esm', target: 'es2022' });
+      // The automatic runtime makes the page consume the packaged "react/jsx-runtime" subpath.
+      const esm = await api.transform(source, { loader: 'jsx', jsx: 'automatic', format: 'esm', target: 'es2022' });
       await write(join(output, `${name}.mjs`), esm.code);
       const system = ts.transpileModule(esm.code, {
         compilerOptions: { module: ts.ModuleKind.System, target: ts.ScriptTarget.ES2022 }
       });
       await write(join(output, `${name}.system.js`), system.outputText);
     }
-    const graphs = {};
-    for (const name of ['app', 'shared']) {
-      const result = await api.build({ absWorkingDir: join(this.#root, 'fixtures'),
-        entryPoints: [`${name}.css`], bundle: true, write: false, metafile: true,
-        outfile: `${name}.css`, sourcemap: 'external' });
-      for (const file of result.outputFiles) await write(join(output, file.path.split('/').at(-1)), file.contents);
-      graphs[name] = result.metafile;
-    }
-    await write(join(output, 'styles.graph.json'), JSON.stringify(graphs, null, 2));
+    const styles = new Styles(api, join(this.#root, 'fixtures'), output);
+    const failures = await styles.build();
+    await styles.dispose();
+    if (failures.length) throw new Error(`Module CSS failed: ${JSON.stringify(failures)}`);
     console.log(`Demo compiled with fork ${api.version}; SystemJS envelope adapter TypeScript ${ts.version}`);
   }
 }

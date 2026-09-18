@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { createRequire as require } from 'node:module';
 import { fileURLToPath as filename } from 'node:url';
-import { mkdir, writeFile as write } from 'node:fs/promises';
+import { mkdir, readFile as read, writeFile as write } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Server } from './server.mjs';
+import { Styles } from './styles.mjs';
+import { Workspace } from '../workspace.mjs';
+import { Toolchain } from '../toolchain.mjs';
 
 /** Verifies real Chromium rendering, interaction, creator updates and module CSS. */
 class Verification {
@@ -23,7 +26,8 @@ class Verification {
       const page = await this.#browser.newPage({ viewport: { width: 1440, height: 1080 } });
       page.on('pageerror', error => this.#errors.push(error.message));
       page.on('response', response => {
-        this.#requests.push({ url: new URL(response.url()).pathname, status: response.status() });
+        const { pathname, search } = new URL(response.url());
+        this.#requests.push({ url: pathname, search, status: response.status() });
       });
       await page.goto(address);
       const results = [];
@@ -51,10 +55,11 @@ class Verification {
           checks: ['React rendered', 'React state updated', 'original Beyond consumer patched',
             'unchanged internal state retained', 'real Kernel CSS registry', 'two shadow roots isolated from document'] });
       }
+      await this.#restyle(page, results);
       assert.deepEqual(this.#errors, [], 'No browser runtime errors');
       assert.ok(this.#requests.every(request => request.status < 400), JSON.stringify(this.#requests.filter(request => request.status >= 400)));
       for (const suffix of ['mjs', 'system.js']) {
-        for (const name of ['react', 'react-dom', 'react-dom-client']) {
+        for (const name of ['react', 'react-jsx-runtime', 'react-dom', 'react-dom-client']) {
           assert.ok(this.#requests.some(request => request.url === `/artifacts/react/${name}.${suffix}`));
         }
       }
@@ -68,7 +73,7 @@ class Verification {
       await write(join(this.#output, 'browser.json'), JSON.stringify({ browser: await this.#browser.version(),
         results, mobile: { width: 390, horizontalOverflow: false },
         requests: this.#requests, errors: this.#errors }, null, 2) + '\n');
-      console.log('PASS: real Chromium ESM + SystemJS, React interaction, Beyond creator patch, modular CSS isolation');
+      console.log('PASS: real Chromium ESM + SystemJS, React interaction, Beyond creator patch, modular CSS isolation and replacement');
       console.log(`Evidence: ${this.#output}`);
     } catch (error) {
       console.error('Browser errors:', this.#errors);
@@ -76,6 +81,38 @@ class Verification {
     } finally {
       await this.#browser?.close();
       await this.#server.close();
+    }
+  }
+
+  /** Rebuilds the invalidated module CSS, then replaces it through the Kernel change contract. */
+  async #restyle(page, results) {
+    const { api } = await Toolchain.load();
+    const fixtures = filename(new URL('./fixtures/', import.meta.url));
+    const workspace = new Workspace();
+    try {
+      for (const name of ['app.css', 'shared.css']) workspace.set(name, await read(join(fixtures, name), 'utf8'));
+      workspace.set('palette.css', ':host { --module-accent: #7a1f5c; }\n');
+      const changed = new Styles(api, workspace.root, this.#output);
+      await changed.build();
+      assert.deepEqual(changed.affected('palette.css'), ['app']);
+      await changed.dispose();
+      for (const result of results) {
+        const frame = page.frames().find(frame => frame.url().includes(`format=${result.format}`));
+        await frame.getByTestId('restyle').click();
+        await frame.waitForFunction(() => getComputedStyle(document.querySelector('#app').shadowRoot
+          .querySelector('.probe')).color === 'rgb(122, 31, 92)', undefined, { timeout: 15000 });
+        assert.equal(await frame.locator('#shared .probe').evaluate(element => getComputedStyle(element).color), result.colors.shared);
+        assert.equal(await frame.locator('.outside').evaluate(element => getComputedStyle(element).color), result.colors.document);
+        assert.equal(await frame.locator('#app').evaluate(element => element.shadowRoot.querySelectorAll('link').length), 1,
+          'The replaced stylesheet was removed after its successor loaded');
+        assert.ok(this.#requests.some(request => request.url === `/cdn/${result.format}/app.css` && request.search === '?version=1'));
+        result.checks.push('module CSS replaced through Kernel change() and versioned href');
+      }
+    } finally {
+      workspace.destroy();
+      const pristine = new Styles(api, fixtures, this.#output);
+      await pristine.build();
+      await pristine.dispose();
     }
   }
 }

@@ -10,9 +10,10 @@ test('React and ReactDOM SSR execute through only the built isolated package map
   const result = JSON.parse(execFileSync(process.execPath, ['-e', `
     const React = require('./react.cjs');
     const server = require('./react-dom-server.cjs');
+    const { jsx } = require('react/jsx-runtime');
     const Component = () => {
       const [value] = React.useState('Beyond ESBuild');
-      return React.createElement('section', { 'data-build': 'fork' }, value);
+      return jsx('section', { 'data-build': 'fork', children: value });
     };
     console.log(JSON.stringify({version: React.version, same: React === require('react'),
       html: server.renderToString(React.createElement(Component)), files: Object.keys(require.cache)}));
@@ -31,7 +32,10 @@ test('React outputs retain separate file/package/public graph evidence and Syste
   assert.ok(graph.packages.some(item => item.name === 'scheduler' && item.version));
   assert.ok(graph.files.flatMap(file => file.imports).some(edge => edge.path === 'react' && edge.boundary === 'public'));
   assert.ok(graph.files.flatMap(file => file.imports).some(edge => edge.boundary === 'file'));
-  for (const name of ['react', 'react-dom', 'react-dom-client']) {
+  assert.deepEqual(graph.packageEdges.map(edge => [edge.from, edge.to, edge.declared, edge.range, edge.satisfied, edge.boundary]), [
+    ['react-dom@19.2.0', 'react@19.2.0', 'peerDependencies', '^19.2.0', true, 'public'],
+    ['react-dom@19.2.0', 'scheduler@0.27.0', 'dependencies', '^0.27.0', true, 'bundled']]);
+  for (const name of ['react', 'react-dom', 'react-dom-client', 'react-jsx-runtime']) {
     assert.match(readFileSync(`${directory}/${name}.system.js`, 'utf8'), /System\.register/);
   }
 });

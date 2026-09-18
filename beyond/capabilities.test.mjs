@@ -70,15 +70,18 @@ test('E1: composed ESM executes and retains live entry exports', async t => {
   assert.deepEqual(Object.keys(entry), ['count', 'increment']);
 });
 
-test('G2: unused TypeScript imports may be absent from both input and output graphs', async t => {
+test('G2: an unused TypeScript import is erased yet still listed as an external input edge', async t => {
   const workspace = new Workspace();
   t.after(() => workspace.destroy());
-  workspace.set('entry.ts', "import { unused } from './unused.ts'; export const value = 1;");
+  workspace.set('entry.ts', "import { unused } from './unused.ts'; import { gone } from '@fixture/gone/main'; export const value = 1;");
   workspace.set('unused.ts', "export { discarded } from '@fixture/unused/main';");
   const result = await new Compilation(workspace).build({ treeShaking: true });
-  // An entirely unused TS import may be erased before graph construction.
+  // The file is never traversed and the output imports nothing...
   assert.ok(!Object.hasOwn(result.metafile.inputs, 'unused.ts'));
   assert.deepEqual(result.metafile.outputs['output.mjs'].imports, []);
+  // ...but both erased records remain on the input, flagged external with the written specifier.
+  assert.deepEqual(result.metafile.inputs['entry.ts'].imports.map(item => [item.path, item.external]),
+    [['./unused.ts', true], ['@fixture/gone/main', true]]);
 });
 
 test('R1: explicit rebuild refreshes dependencies and recovers after deletion', async t => {
@@ -142,4 +145,18 @@ test('S1: source map distinguishes same-basename internal TypeScript files', asy
     assert.match(map.sourcesContent[index], /number/);
   }
   assert.ok(map.mappings.length > 0);
+});
+
+test('X1: cjs-module-lexer reads assigned exports; upstream getters need the node annotation', async () => {
+  const lexer = require(import.meta.url)('./.cache/runtime/node_modules/cjs-module-lexer');
+  await lexer.init();
+  const source = "export let count = 0; export function increment() { count++; } export * from './values';";
+  const names = async options => lexer.parse((await api.transform(source, { format: 'cjs', loader: 'ts', ...options })).code);
+  assert.deepEqual(await names({}), { exports: [], reexports: [] }, 'Upstream getters are invisible to the lexer');
+  // The upstream node annotation is lexer-complete; what getters lack is assignment, not names.
+  assert.deepEqual(await names({ platform: 'node' }), { exports: ['count', 'increment'], reexports: ['./values'] });
+  const assigned = await names({ cjsExports: 'assign' });
+  assert.deepEqual(assigned.exports.sort(), ['__esModule', 'count', 'increment']);
+  assert.deepEqual(assigned.reexports, ['./values']);
+  await assert.rejects(api.transform(source, { format: 'esm', loader: 'ts', cjsExports: 'assign' }), /require the "cjs" output format/);
 });

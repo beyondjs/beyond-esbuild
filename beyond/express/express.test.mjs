@@ -35,4 +35,9 @@ test('Express graph records transitive installed packages separately from files'
   assert.ok(graph.packages.some(item => item.name === 'express' && item.version === '5.1.0'));
   assert.ok(graph.packages.some(item => item.name === 'router'));
   assert.ok(graph.files.flatMap(file => file.imports).some(edge => edge.external));
+  const router = graph.packageEdges.find(edge => edge.from === 'express@5.1.0' && edge.to.startsWith('router@'));
+  assert.deepEqual([router.declared, router.satisfied, router.boundary], ['dependencies', true, 'bundled']);
+  assert.ok(graph.packageEdges.length > 20, 'Transitive package edges are recorded, not only the root');
+  assert.deepEqual(graph.packageEdges.filter(edge => !edge.satisfied), [],
+    'Every crossed package boundary is declared and satisfied by the installed version');
 });

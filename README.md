@@ -2,9 +2,9 @@
 
 Beyond ESBuild is the [Beyond-maintained fork](https://github.com/beyondjs/beyond-esbuild) of [evanw/esbuild](https://github.com/evanw/esbuild), used to develop and test compilation for Beyond's modular runtime and package distribution.
 
-**Current status: preparation and bounded tests with existing APIs/adapters. The esbuild compiler core has not been modified.** The working demo establishes only the recorded fixture behavior; complete Beyond implementation and production integration remain open for a new implementation task.
+**Current status: one bounded, opt-in compiler change, [assigned CommonJS exports](docs/cjs-exports.md), plus adapters and executable cases around the public API. Upstream behavior and every upstream test snapshot are unchanged when the option is not used.** The recorded cases establish only their fixture behavior; Packages, CDN and production integration remain open.
 
-Beyond delivers addressable public modules composed from internal source modules. Their bare public references, internal identities, exports and dependency relationships must survive compilation. This repository makes those requirements executable before adapting the compiler core.
+Beyond delivers addressable public modules composed from internal source modules. Their bare public references, internal identities, exports and dependency relationships must survive compilation. This repository makes each requirement executable before adapting the compiler, and changes the compiler only where a failing case requires it.
 
 Three independent responsibilities guide the prepared examples and the next implementation:
 
@@ -30,11 +30,12 @@ The preparation script builds **this checkout's compiler and matching API**. It 
 - [Scenario index and current evidence](docs/README.md)
 - [Beyond compilation and runtime contracts](docs/beyond-architecture.md)
 - [Requirements, acceptance cases and unknowns](docs/requirements.md)
+- [Assigned CommonJS exports: the fork's compiler change](docs/cjs-exports.md)
 - [Compiler subsystem audit and reading coverage](docs/compiler-audit.md)
 - [Executable assessment workspace](beyond/README.md)
 - [Coding standards](docs/coding-standards.md) and [contributor instructions](AGENTS.md)
 
-The current work adds bounded adapters, fixtures and validation. The upstream compiler implementation remains unchanged; no consumer migration, package publication or production CDN deployment has occurred. Passing local examples does not establish complete Packages integration or a general-purpose runtime adapter.
+The current work adds bounded adapters, fixtures, validation and the `cjsExports: 'assign'` compiler option that Beyond's internal-module creators require. Fork-specific compiler code is marked `Beyond ESBuild` in place. No consumer migration, package publication or production CDN deployment has occurred. Passing local examples does not establish complete Packages integration or a general-purpose runtime adapter.
 
 ## Upstream and license
 

@@ -9,6 +9,8 @@ process.env.ESBUILD_BINARY_PATH = resolve(cache, 'esbuild');
 const require = createRequire(resolve(cache, 'runtime/package.json'));
 const compiler = require(resolve(cache, 'api.cjs'));
 const typescript = require('typescript');
+const { Installed } = await import('../graph/installed.mjs');
+const installed = new Installed(require('semver'), root);
 
 /** Packages a fixed trusted React dependency into independently addressable modules. */
 export class ReactBuild {
@@ -21,7 +23,8 @@ export class ReactBuild {
     }
     mkdirSync(this.#output, { recursive: true });
     for (const [name, specifier] of [['react', 'react'], ['react-dom', 'react-dom'],
-      ['react-dom-client', 'react-dom/client'], ['react-dom-server', 'react-dom/server']]) {
+      ['react-dom-client', 'react-dom/client'], ['react-dom-server', 'react-dom/server'],
+      ['react-jsx-runtime', 'react/jsx-runtime']]) {
       await this.#build(name, specifier);
     }
     writeFileSync(resolve(this.#output, 'report.json'), JSON.stringify({ compiler: compiler.version,
@@ -64,7 +67,7 @@ export class ReactBuild {
         else queue.push(edge.path);
       }
     }
-    const graph = { files, packages,
+    const graph = { files, packages, packageEdges: installed.edges(files),
       traversal: { entry: '<stdin>', files: [...reachable].sort(), public: [...publics].sort() },
       outputs: result.metafile.outputs,
       note: 'File edges and installed package identities are separate. External public specifiers remain unresolved by this build; no Beyond version selection is inferred.' };
@@ -76,7 +79,7 @@ export class ReactBuild {
     const namespace = require(specifier);
     const names = Object.keys(namespace).filter(name => /^[A-Za-z_$][\w$]*$/.test(name) && name !== 'default' && name !== '__esModule');
     const server = name === 'react-dom-server';
-    const externals = specifier === 'react' ? [] : ['react', ...(specifier === 'react-dom' ? [] : ['react-dom'])];
+    const externals = specifier === 'react' ? [] : ['react', ...(specifier.startsWith('react-dom/') ? ['react-dom'] : [])];
     const options = { absWorkingDir: root, bundle: true, write: false, metafile: true,
       logLevel: 'silent', define: { 'process.env.NODE_ENV': '"production"' },
       external: externals, target: 'es2022', legalComments: 'inline' };
@@ -89,7 +92,9 @@ export class ReactBuild {
     writeFileSync(resolve(directory, `${part}.cjs`), cjs.outputFiles[0].contents);
     writeFileSync(resolve(this.#output, `${name}.cjs`), `module.exports = require('./node_modules/${specifier.startsWith('react-dom') ? 'react-dom' : 'react'}/${part}.cjs');\n`);
     writeFileSync(resolve(directory, 'package.json'), JSON.stringify({ name: specifier.startsWith('react-dom') ? 'react-dom' : 'react',
-      version: '19.2.0', main: './index.cjs', exports: { '.': './index.cjs', './client': './client.cjs', './server': './server.cjs' } }, null, 2));
+      version: '19.2.0', main: './index.cjs', exports: specifier.startsWith('react-dom')
+        ? { '.': './index.cjs', './client': './client.cjs', './server': './server.cjs' }
+        : { '.': './index.cjs', './jsx-runtime': './jsx-runtime.cjs' } }, null, 2));
     this.#graph(cjs, `${name}.cjs`);
     if (server) {
       this.#records.push({ name, source: relative(root, source), names, formats: ['cjs'], platform: 'node' });
