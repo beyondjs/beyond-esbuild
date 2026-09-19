@@ -1,14 +1,20 @@
-import { mkdirSync as mkdir, writeFileSync as write } from 'node:fs';
+import { mkdirSync as mkdir, rmSync as remove, writeFileSync as write } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { Cohesive } from './cohesive.mjs';
 import { Packaged } from './packaged.mjs';
 import { Resolution } from './resolution.mjs';
+import { SharedFiles } from './shared.mjs';
 
 /**
  * Packages published packages as independently addressable public modules: one artifact per
  * package, version and public subpath, following public references transitively. Every
  * reference is resolved from the importing package, so nested versions stay separate and are
  * expressed as import-map scopes. Versions are read from the installation, never selected.
+ *
+ * The public module is the only unit of division. Each artifact is compiled on its own, whoever
+ * else is packaged with it, and every reference to another public module stays a bare reference.
+ * Public subpaths that resolve to one file are one module with several names, as they are for
+ * Node. A package whose public modules share private files cannot be expressed that way: it is
+ * reported as unsupported and withdrawn, never divided into private chunks.
  */
 export class Distribution {
   #toolchain;
@@ -19,18 +25,15 @@ export class Distribution {
   #artifacts = new Map();
   #roots = new Map();
   #unsupported = [];
-  #cohesion;
+  #entries = new Map();
+  #withdrawn = new Set();
 
-  /**
-   * `root` holds the installed `node_modules`; `output` receives artifacts, import map and report.
-   * `cohesion: false` skips the split build; it exists as the negative control of that pass.
-   */
-  constructor(toolchain, { root, output, target, cohesion = true }) {
+  /** `root` holds the installed `node_modules`; `output` receives artifacts, import map and report. */
+  constructor(toolchain, { root, output, target }) {
     this.#toolchain = toolchain;
     this.#target = target;
     this.#root = root;
     this.#output = output;
-    this.#cohesion = cohesion;
     this.#resolution = new Resolution(toolchain.api, target);
   }
 
@@ -53,14 +56,24 @@ export class Distribution {
     const file = `${name}@${version}/${part}.${this.#target.key}.${style ? 'css' : 'mjs'}`;
     if (this.#artifacts.has(file)) return this.#artifacts.get(file);
 
-    const artifact = { specifier, file, package: name, version, subpath: resolved.subpath,
+    // Another public subpath of this package version already resolved to the same file: one module, two names
+    const identity = `${name}@${version}:${resolved.path}`;
+    if (this.#entries.has(identity)) {
+      const existing = this.#entries.get(identity);
+      !existing.names.includes(specifier) && existing.names.push(specifier);
+      return existing;
+    }
+
+    const artifact = { specifier, names: [specifier], file, package: name, version, subpath: resolved.subpath,
       source: Resolution.portable(this.#root, resolved.path), references: {} };
     this.#artifacts.set(file, artifact);
+    this.#entries.set(identity, artifact);
 
     const packaged = await new Packaged(this.#toolchain, { entry: resolved.path, root: this.#root, target: this.#target,
       published: async path => (path === resolved.path ? undefined : this.#resolution.published(path)),
       options: style ? { loader: { '.woff2': 'dataurl', '.svg': 'dataurl' } } : {} }).build().catch(error => {
       this.#artifacts.delete(file);
+      this.#entries.delete(identity);
       throw error;
     });
     Object.assign(artifact, { input: packaged.input, adapters: packaged.adapters, exports: packaged.exports,
@@ -109,10 +122,10 @@ export class Distribution {
   importmap(prefix = './') {
     const imports = {};
     const scopes = {};
-    for (const [specifier, file] of this.#roots) imports[specifier] = prefix + file;
+    for (const [specifier, file] of this.#roots) !this.#withdrawn.has(file) && (imports[specifier] = prefix + file);
     for (const artifact of this.artifacts) {
       for (const [specifier, reference] of Object.entries(artifact.references)) {
-        if (!reference.file) continue;
+        if (!reference.file || this.#withdrawn.has(reference.file)) continue;
         if (!(specifier in imports)) imports[specifier] = prefix + reference.file;
         if (imports[specifier] === prefix + reference.file) continue;
         const scope = `${prefix}${artifact.package}@${artifact.version}/`;
@@ -123,41 +136,32 @@ export class Distribution {
   }
 
   /**
-   * Artifacts of one package that bundled the same unpublished file would each own a copy of its
-   * state. Those packages are compiled again as one split build; a package with CommonJS inputs
-   * cannot be split and is reported instead.
+   * Withdraws the public modules of a package that share private files: their artifacts are removed and
+   * left out of the import map, and whoever references them is reported, so nothing loads two copies of
+   * one state without being told.
    */
-  async #cohere() {
-    const groups = new Map();
-    this.artifacts.filter(artifact => !artifact.file.endsWith('.css')).forEach(artifact => {
-      const key = `${artifact.package}@${artifact.version}`;
-      groups.set(key, [...(groups.get(key) ?? []), artifact]);
-    });
-    for (const [key, artifacts] of groups) {
-      const counts = new Map();
-      artifacts.forEach(artifact => artifact.inputs.forEach(input => counts.set(input, (counts.get(input) ?? 0) + 1)));
-      const shared = [...counts].filter(([, count]) => count > 1).map(([input]) => input).sort();
-      if (!shared.length) continue;
-      if (artifacts.some(artifact => artifact.input === 'cjs' || artifact.adapters.length)) {
-        this.#unsupported.push({ package: key, reason: 'duplicated-state', shared,
-          detail: 'Subpaths share unpublished CommonJS files; native splitting is ESM only, so each artifact keeps a copy' });
-        continue;
-      }
-      const entries = artifacts.map(artifact => ({ path: artifact.entry, out: artifact.file.slice(key.length + 1, -'.mjs'.length) }));
-      const cohesive = await new Cohesive(this.#toolchain, { entries, root: this.#root, target: this.#target,
-        published: async path => (entries.some(entry => entry.path === path) ? undefined : this.#resolution.published(path)) }).build();
-      cohesive.files.forEach(({ file, text }) => {
-        mkdir(dirname(join(this.#output, key, file)), { recursive: true });
-        write(join(this.#output, key, file), text);
+  #withdraw() {
+    for (const group of new SharedFiles(this.artifacts).groups) {
+      this.#unsupported.push({ ...group, reason: 'shared-private-files',
+        detail: 'Public modules of this package bundle the same private files, so each artifact would hold its own copy ' +
+          'of their state. No public module publishes those files, and Beyond divides code by public module only.' });
+      group.artifacts.forEach(file => {
+        this.#withdrawn.add(file);
+        [file, `${file}.map`].forEach(name => remove(join(this.#output, name), { force: true }));
+        this.#artifacts.get(file).unsupported = 'shared-private-files';
       });
-      artifacts.forEach((artifact, index) => Object.assign(artifact, { splitting: true, shared: shared.length,
-        chunks: cohesive.artifacts.get(entries[index].out).chunks, exports: cohesive.artifacts.get(entries[index].out).exports }));
+    }
+    for (const artifact of this.artifacts) {
+      for (const [specifier, reference] of Object.entries(artifact.references)) {
+        if (!this.#withdrawn.has(reference.file) || this.#withdrawn.has(artifact.file)) continue;
+        this.#unsupported.push({ artifact: artifact.file, specifier, reason: 'references an unsupported module' });
+      }
     }
   }
 
   /** Writes `importmap.json` and `report.json`; returns the report. */
   async finish(extra = {}) {
-    if (this.#cohesion) await this.#cohere();
+    this.#withdraw();
     const packages = new Map(this.artifacts.map(artifact => [`${artifact.package}@${artifact.version}`,
       { name: artifact.package, version: artifact.version }]));
     const edges = this.artifacts.flatMap(artifact => Object.entries(artifact.references)

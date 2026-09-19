@@ -25,7 +25,7 @@ export class Ecosystem {
 
   get output() { return join(this.#toolchain.cache, 'packaging'); }
 
-  async build(platform, environment, { cohesion = true } = {}) {
+  async build(platform, environment) {
     const target = new Target({ platform, environment });
     const require = createRequire(join(this.#toolchain.ecosystem, 'package.json'));
     const server = platform === 'node';
@@ -37,20 +37,48 @@ export class Ecosystem {
     const authored = await new Authored(this.#toolchain, { target, plugins, output: join(output, 'authored'),
       packages: ['vue-app', 'svelte-app', 'controls'].map(name => join(this.#fixtures, name)),
       options: { jsx: 'automatic' } }).build();
-    const distribution = new Distribution(this.#toolchain, { root: this.#toolchain.ecosystem, target, cohesion,
+    const distribution = new Distribution(this.#toolchain, { root: this.#toolchain.ecosystem, target,
       output: join(output, 'packages') });
     const externals = new Set(authored.report.modules.flatMap(module => module.references
       .filter(reference => reference.source === 'external').map(reference => reference.specifier)));
     for (const specifier of [...externals, ...(server ? [] : Ecosystem.assets)]) await distribution.add(specifier);
     const report = await distribution.finish({ adapters: { framework: ['@vue/compiler-sfc', 'svelte/compiler'] } });
 
+    // An authored module whose public references reach a withdrawn module cannot be loaded whole: it is
+    // reported and left out of the map, instead of failing on the first import a consumer happens to make
+    const unsupported = this.#blocked(authored.report.modules, report.artifacts);
+    const blocked = new Set(unsupported.map(({ module }) => module));
+
     const imports = {};
-    Object.entries(authored.imports).forEach(([specifier, file]) => (imports[specifier] = `./authored/${file.slice(2)}`));
+    Object.entries(authored.imports).filter(([specifier]) => !blocked.has(specifier))
+      .forEach(([specifier, file]) => (imports[specifier] = `./authored/${file.slice(2)}`));
     const packaged = distribution.importmap('./packages/');
     const map = { imports: { ...packaged.imports, ...imports }, ...(packaged.scopes ? { scopes: packaged.scopes } : {}) };
     mkdir(output, { recursive: true });
     write(join(output, 'importmap.json'), JSON.stringify(map, null, 2));
-    return { target: target.key, output, map, authored: authored.report, packages: report };
+    return { target: target.key, output, map, authored: authored.report, packages: report, unsupported };
+  }
+
+  /** `[{ module, through }]`: authored modules and the withdrawn public module their references lead to. */
+  #blocked(modules, artifacts) {
+    const named = new Map(artifacts.flatMap(artifact => (artifact.names ?? [artifact.specifier]).map(name => [name, artifact])));
+    const files = new Map(artifacts.map(artifact => [artifact.file, artifact]));
+
+    const reach = (artifact, seen = new Set()) => {
+      if (!artifact || seen.has(artifact.file)) return;
+      seen.add(artifact.file);
+      if (artifact.unsupported) return artifact.specifier;
+      for (const reference of Object.values(artifact.references)) {
+        const found = reference.file && reach(files.get(reference.file), seen);
+        if (found) return found;
+      }
+    };
+
+    return modules.flatMap(module => {
+      const through = module.references.filter(reference => reference.source === 'external')
+        .map(reference => reach(named.get(reference.specifier))).find(Boolean);
+      return through ? [{ module: module.specifier, through }] : [];
+    });
   }
 }
 

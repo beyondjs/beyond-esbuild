@@ -166,6 +166,8 @@ Generated evidence under `beyond/.cache/`: `example/report.json` (including `gra
 
 ## Third delivery: packaging mode, package coverage and Packages trial
 
+This section is the record of that delivery as executed. Its split build, case E6 as listed here and the `BEYOND_COHESION` control were later removed; [the architecture correction](#architecture-correction-public-modules-as-the-only-division) records what replaced them. The results below are kept as evidence, including the negative control, which is the recorded failure of Svelte when its public modules are compiled separately.
+
 Executed 2026-09-18 in the same environment: Node.js `v22.21.1`, Go `go1.27.1 darwin/arm64`, Playwright 1.62.1 with Chromium 151.0.7922.34, SystemJS 6.15.1, TypeScript 5.8.3. The checkout was at `7efe3fb4fdd10d894a04fc911fb200d4c02d8458` with this delivery's fixtures, tests and guides as working changes, committed afterwards with owner authorization in the commit that contains this record; no Go or `lib/` source changed, and `beyond/.cache/provenance.json` was regenerated at that revision before the runs. Contracts, findings and limits are in [the packaging guide](packaging.md); this section is the run record. None of it is acceptance of the unified-runtime mode, and the creator cases above remain legacy Kernel evidence only.
 
 ### Commands and results
@@ -217,3 +219,36 @@ PLAYWRIGHT=/absolute/path/to/playwright node beyond/packaging/verify.mjs
 - Package coverage is the pinned list. The unsupported and uncovered cases are listed in [the packaging guide](packaging.md#package-coverage). Import-map scopes for nested versions are implemented but no installed tree exercised them.
 - The System.register adapter run does not chain source maps. IIFE output was not exercised. The upstream JavaScript, WASM and end-to-end scripts were again not run; they are unaffected by this delivery, which changes no compiler source.
 - Nothing was pushed or published, and no consumer was migrated. The fork, Packages and suite changes are local commits on `feature/next`.
+
+## Architecture correction: public modules as the only division
+
+Executed 2026-09-18, after the third delivery, in the same environment and with the same fork build (`0.28.2`, revision `7efe3fb4`; no compiler source changed). The owner established that Beyond divides executable code by public module only, so the split build was removed rather than carried into Packages. [The packaging guide](packaging.md#shared-state-between-public-modules) describes the resulting behavior.
+
+What changed: `cohesive.mjs` and the `cohesion` option are gone; `Distribution` compiles every public module on its own, gives one artifact to public subpaths that resolve to one file, and reports and withdraws packages whose public modules share private files (`shared.mjs`); `Ecosystem` reports the authored modules those packages block; the System.register conversion moved to `system.mjs` and now chains its source maps with the existing `Chain` of `beyond/example/maps.mjs`, which the third delivery recorded as missing; `verify.mjs` no longer drives Svelte or Shoelace.
+
+```sh
+node --test beyond/capabilities.test.mjs beyond/example/creators.test.mjs beyond/graph/graph.test.mjs \
+  beyond/demo/styles.test.mjs beyond/react/react.test.mjs beyond/express/express.test.mjs \
+  beyond/packaging/packaging.test.mjs beyond/packaging/ecosystem.test.mjs beyond/packaging/boundaries.test.mjs
+PLAYWRIGHT=/absolute/path/to/playwright node beyond/packaging/verify.mjs
+```
+
+| Check | Result |
+| --- | --- |
+| All nine Node test files | 41 of 41: the 30 earlier tests outside `ecosystem.test.mjs`, E1–E8 and B1–B3 |
+| `beyond/packaging/verify.mjs` | `PASS` for `browser.production` native ESM, `browser.development` native ESM and `browser.production` through the System.register adapter with SystemJS; 43 module requests each, no failed request, no page or console error, no request for a chunk or for a withdrawn module |
+| Not run again | `go vet`, the Go test packages, the second-delivery runner and the demo verification: no Go source and none of their inputs changed |
+
+| Case | Established |
+| --- | --- |
+| E2 (replaced) | The Svelte fixture modules are reported as blocked, are absent from the import map, and loading one is refused with `ERR_MODULE_NOT_FOUND` rather than half loaded |
+| E5 (changed) | `unsupported` names exactly `svelte@5.57.0` and `@shoelace-style/shoelace@2.20.1`; the edge assertions are unchanged |
+| E6 (replaced) | A published sibling is a public reference; `esm-env/development` and `esm-env/node` are one artifact with two names and one URL in the import map; no artifact records splitting or chunks; every `.mjs` on disk is a published public module; Svelte's shared files include `internal/client/runtime.js`, Shoelace's are all under `dist/chunks/`, and none of their artifacts is written or mapped |
+| E8 | The System.register tree has the same modules as the native one, and each converted module declares exactly the public references of its ES module, all of them bare. The position of `litHtmlVersions` in the converted `lit-html` module maps to the line that holds it in `node_modules/lit-html/src/lit-html.ts`, the TypeScript source the published JavaScript itself maps to |
+| B1 | Regression guard: two public modules that each bundle one private stateful file hold different state objects (`a, a, b` counts `1, 2, 1`), and `Distribution` reports that package and offers neither module |
+| B2 | When the package publishes the shared file, both modules reference it, bundle only their own entry and share one state (`1, 2, 3` through the three modules) |
+| B3 | `lit-html` has the same address, bytes, exports and references packaged alone or together with `lit` and a directive, which reach it through the bare reference and hold no copy. Every module is now compiled on its own, so this holds by construction; the case exists to stop a joint build from returning |
+
+Executed the same day in the Packages checkout, and committed there locally as `9922676` with the development runtime as `169d712` in its own repository: the packaging trial at 8 of 8 with the relative and `env:` compiler selection; stage-1 at 21 of 21 after the runtime became a bundler setting; and the unified-runtime validation at 6 of 6 and 7 of 7, in which Packages compiles the development runtime with this fork (`0.28.2`, `assigned: true`, selected as `env:BEYOND_ESBUILD_COMPILER`). Their guides are in that repository. The fork package reports revision `7efe3fb4`: it was laid out before the last fork commit, and no compiler source changed since.
+
+Consequences for the record above: Svelte, both as published JavaScript and as component source, and Shoelace components consumed by subpath moved from covered to **unsupported**. No solution compatible with public module identity is established for them. The third-delivery limit that names a missing "cohesion pass" in the Packages trial no longer describes work to do.

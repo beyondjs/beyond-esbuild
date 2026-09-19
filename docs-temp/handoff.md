@@ -20,11 +20,11 @@ The third delivery worked within that scope: packaging, its update behavior and 
 1. Established that the authored example implements runtime composition, and added a packaged authored path: `Authored`, `Packaged`, `Boundary`, cases K1–K5.
 2. Re-exports reproduced through an independent consuming public module: correct in ESM, native CommonJS and assigned CommonJS. Development propagation depends on re-addressing public dependents through the graph (closure identity), not on the compiler; a loaded consumer is a reload boundary.
 3. Assessed `cjsExports: 'assign'` per path: needed for creators only.
-4. Generic published-package closure with pinned Vue, Svelte, Radix, Headless UI, Shoelace and Lit: framework source adapters, CommonJS adapters, conditional exports, subpaths, peer dependencies, styles, minification; Node SSR and Chromium, native ESM and the System.register adapter.
+4. Generic published-package closure with pinned Vue, Radix, Headless UI and Lit (Svelte and Shoelace components are reported as unsupported since the architecture correction: the public module is the only division, no split build, no private chunks): framework source adapters, CommonJS adapters, conditional exports, subpaths, peer dependencies, styles, minification; Node SSR and Chromium, native ESM and the System.register adapter.
 5. Two state hazards found by execution and handled in adapters: published siblings become public references; subpaths sharing unpublished files are split natively.
 6. Packages trial: per-module selection through the existing `bundler` key, explicit compiler selection with the resolved identity reported, production conditional, watched development rebuild. 7 of 7; stage-1 still 21 of 21.
 
-`docs/packaging.md` has contracts, findings, coverage and limits; `docs/validation.md` has the run record: 16 Go packages, 37 Node tests, the runner, two Chromium verifications, the Packages trial.
+`docs/packaging.md` has contracts, findings, coverage and limits; `docs/validation.md` has the run record: 16 Go packages, 37 Node tests, the runner, two Chromium verifications, the Packages trial, and after the architecture correction 41 Node tests and the packaging Chromium verification again.
 
 ## Open decisions for the owner
 

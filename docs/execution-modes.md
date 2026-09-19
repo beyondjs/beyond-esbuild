@@ -25,6 +25,14 @@ ESM is the proposed preferred public distribution output. CommonJS input compati
 
 Upstream esbuild supports ESM, CommonJS and IIFE output ([official format API](https://esbuild.github.io/api/#format)). The current fork's System.register output uses an explicit TypeScript adapter. Native System.register emission would be a separate compiler feature requiring demonstrated consumer need and regression coverage; it is not approved or a prerequisite for this packaging delivery. Preserve existing compatibility while evaluating whether a direct emitter is justified.
 
+## Public module identity and shared implementation files
+
+The public module is the architectural unit of executable composition, loading and dependency identity. Beyond already partitions applications at public-module boundaries. Additional compiler-driven code splitting into private executable chunks is outside the supported packaging contract; do not enable it as a second partitioning layer. Optimizations within a module do not authorize changing those boundaries. Source maps and styles are distinct associated resources; their existence does not authorize additional executable module boundaries.
+
+For Beyond-authored packages, shared state across public modules belongs behind an explicit public module identity. Repeated consumption of that same resolved identity must not create separate copies of its state. This identity guarantee does not make arbitrary code side effects mathematically idempotent.
+
+Third-party packages can expose multiple public entry points that share private source files. Bundling each entry independently can duplicate state even when each public entry is loaded only once. That is a real compatibility problem, but does not establish code splitting as the approved Beyond solution. Existing split-build fixtures demonstrate an experimental workaround only. Replace that workaround with a contract-compatible solution before claiming Beyond acceptance for those fixtures. Resolve how shared implementation preserves identity, declared boundaries, resolution, independent compilation and cache invalidation within the Beyond model. Do not silently publish private source files as public APIs or flatten distinct public modules to conceal the issue.
+
 ## Per-module selection and shared contracts
 
 During development, a module must be selectable between these modes without changing its public identity or forcing every module into the same mode. Packages must resolve the selected compiler/runtime path explicitly. Preserve independent module boundaries when esbuild bundles internal files; bundling internals does not authorize flattening all public modules or packages into an application-wide artifact.

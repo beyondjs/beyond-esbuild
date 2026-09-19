@@ -44,7 +44,7 @@ The [packaging mode](packaging.md) cases use their own pinned installation, so t
 
 ```sh
 npm install --prefix beyond/.cache/ecosystem --no-save --package-lock=false vue@3.5.43 @vue/compiler-sfc@3.5.43 @vue/server-renderer@3.5.43 svelte@5.57.0 react@19.2.0 react-dom@19.2.0 @radix-ui/react-tabs@1.1.21 @headlessui/vue@1.7.23 @shoelace-style/shoelace@2.20.1 lit@3.3.3
-node --test beyond/packaging/packaging.test.mjs beyond/packaging/ecosystem.test.mjs
+node --test beyond/packaging/packaging.test.mjs beyond/packaging/ecosystem.test.mjs beyond/packaging/boundaries.test.mjs
 node beyond/packaging/ecosystem.mjs
 PLAYWRIGHT=/absolute/path/to/playwright node beyond/packaging/verify.mjs
 ```
