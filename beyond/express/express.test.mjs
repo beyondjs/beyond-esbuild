@@ -5,23 +5,17 @@ import { readFileSync } from 'node:fs';
 import { ExpressBuild } from './build.mjs';
 
 const directory = await new ExpressBuild().run();
+// The checked-in consumer is evaluated in the output directory, where './express.mjs' resolves.
+const consumer = readFileSync(new URL('./fixtures/consumer.mjs', import.meta.url), 'utf8');
+const esm = "(await import('./express.mjs')).default";
+assert.ok(consumer.includes(esm), 'The consumer loads the ESM artifact through the substituted expression');
 
 for (const format of ['cjs', 'esm']) {
   test(`Express ${format} serves real HTTP using only the built artifact`, () => {
-    const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `
-      import {createRequire} from 'node:module';
-      const require = createRequire(import.meta.url);
-      const express = ${format === 'esm' ? "(await import('./express.mjs')).default" : "require('./express.cjs')"};
-      const app = express();
-      app.use(express.json());
-      app.post('/probe/:name', (request, response) => response.json({name: request.params.name, value: request.body.value}));
-      const server = await new Promise((resolve, reject) => {const server = app.listen(0, '127.0.0.1', error => error ? reject(error) : resolve(server));});
-      try {
-        const response = await fetch('http://127.0.0.1:' + server.address().port + '/probe/Beyond', {
-          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({value: 42})});
-        console.log(JSON.stringify({status: response.status, body: await response.json(), files: Object.keys(require.cache)}));
-      } finally {await new Promise((resolve,reject) => server.close(error => error ? reject(error) : resolve()));}
-    `], { cwd: directory, encoding: 'utf8', timeout: 15000 }));
+    // The CommonJS probe replaces only the expression that loads the artifact.
+    const source = format === 'esm' ? consumer : consumer.replace(esm, "require('./express.cjs')");
+    const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', source],
+      { cwd: directory, encoding: 'utf8', timeout: 15000 }));
     assert.equal(result.status, 200);
     assert.deepEqual(result.body, { name: 'Beyond', value: 42 });
     assert.ok(result.files.every(path => path.startsWith(directory + '/')));

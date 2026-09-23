@@ -9,7 +9,7 @@ Executable cases for the packaging mode: a public module bundled into a distribu
 | `distribution.mjs`, `shared.mjs` | Closure of published packages, each public module compiled on its own; import map with scopes and package edges; one artifact for subpaths that resolve to one file; packages whose public modules share private files are reported and withdrawn, never split |
 | `system.mjs` | The System.register adapter over a built tree, with chained source maps and the dependencies each converted module declares |
 | `adapters/` | Vue and Svelte source adapters |
-| `fixtures/` | Authored fixture packages: a Vue SFC app, a Svelte component app and modules that consume Radix and Shoelace controls, each with client and server entries where that applies. The Svelte and Shoelace modules are built and then reported as blocked |
+| `fixtures/` | Authored fixture packages, described in [their guide](fixtures/README.md): the `counter/` packages of K1–K5 (a value module, a re-exporting facade and a consumer), and the ecosystem targets, a Vue SFC app, a Svelte component app and modules that consume Radix and Shoelace controls, each with client and server entries where that applies. The Svelte and Shoelace modules are built and then reported as blocked |
 | `loader.mjs`, `register.mjs`, `process.mjs`, `consumer.mjs` | Test tooling: import maps in Node and a long-lived consumer process |
 | `packaging.test.mjs` | K1–K5: production execution, re-exports, development re-addressing, shared state, source maps |
 | `ecosystem.mjs`, `ecosystem.test.mjs` | Builds the three targets; E1–E8: SSR, conditional exports, adapters, package edges, public modules as the only division, minification, the System.register graph |

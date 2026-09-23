@@ -25,7 +25,7 @@ Bare `react` and `react-dom` references stay external. Because ReactDOM's Common
 
 On 2026-09-18, Node 22.21.1 with fork baseline `f6058f8364fe7ab91ca57a83e02577ed74c9cae4` (esbuild 0.28.2, built with Go 1.27.1 darwin/arm64) passed both tests:
 
-- A fresh Node process loads only compiled CJS artifacts, observes one React identity, executes a component using `useState`, and renders the exact expected HTML with built ReactDOM server. Its require cache must contain no source from the installed input dependency workspace.
+- A fresh Node process evaluating the checked-in consumer [`fixtures/consumer.cjs`](fixtures/README.md) loads only compiled CJS artifacts, observes one React identity, executes a component using `useState`, and renders the exact expected HTML with built ReactDOM server. Its require cache must contain no source from the installed input dependency workspace.
 - The client graph includes scheduler package identity, internal file edges, external React edges and exactly the two satisfied package edges above; all four System artifacts contain `System.register`.
 
 The second delivery reran both tests against the modified compiler at `4559612a` plus uncommitted changes, with SSR now rendering through the packaged `react/jsx-runtime`; see [validation](../../docs/validation.md#second-delivery-compiler-change-and-remaining-contracts).

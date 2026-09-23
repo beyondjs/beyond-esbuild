@@ -1,0 +1,12 @@
+import { format } from './format';
+import type { Shape } from './types';
+import { unused } from './unused';
+import { gone } from '@fixture/gone/main';
+import { greeting } from '@fixture/shared/message';
+import { theme } from '@fixture/app/settings';
+import { join } from 'node:path';
+import React from 'react';
+const legacy = require('@fixture/legacy/main');
+export const lazy = () => import('@fixture/shared/lazy');
+export const strict = () => import('@fixture/strict/main');
+export const view = (shape: Shape) => format(greeting() + theme + join('a', 'b') + legacy + React.version);

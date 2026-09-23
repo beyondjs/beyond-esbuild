@@ -252,3 +252,38 @@ PLAYWRIGHT=/absolute/path/to/playwright node beyond/packaging/verify.mjs
 Executed the same day in the Packages checkout, and committed there locally as `9922676` with the development runtime as `169d712` in its own repository: the packaging trial at 8 of 8 with the relative and `env:` compiler selection; stage-1 at 21 of 21 after the runtime became a bundler setting; and the unified-runtime validation at 6 of 6 and 7 of 7, in which Packages compiles the development runtime with this fork (`0.28.2`, `assigned: true`, selected as `env:BEYOND_ESBUILD_COMPILER`). Their guides are in that repository. The fork package reports revision `7efe3fb4`: it was laid out before the last fork commit, and no compiler source changed since.
 
 Consequences for the record above: Svelte, both as published JavaScript and as component source, and Shoelace components consumed by subpath moved from covered to **unsupported**. No solution compatible with public module identity is established for them. The third-delivery limit that names a missing "cohesion pass" in the Packages trial no longer describes work to do.
+
+## Source fixtures as checked-in files
+
+Executed 2026-09-22 with Node.js `v22.21.1` on the prepared fork build of `beyond/.cache/` (`0.28.2`, provenance revision `7efe3fb4`; no Go or `lib/` source changed since, and Go was not on `PATH`, so preparation was not rerun). The checkout was at `32f5cf0e` with this change as working changes. No compiler source, upstream test or snapshot changed.
+
+What changed: the multi-file sources the tests used to write from strings are checked-in files under the consuming area's `fixtures/`, each directory with a README, and [the workspace guide](../beyond/README.md#tests-fixtures-and-generated-output) records the layout and the inputs that stay inline. `Workspace.copy()` places a fixture in the test's temporary directory; edits apply only to that copy.
+
+| Old inline source | Checked-in fixture | Cases | Preserved |
+| --- | --- | --- | --- |
+| The `Fixture` constructor and `counter` string of `packaging.test.mjs` (3 manifests, 9 sources) | `beyond/packaging/fixtures/counter/` | K1–K5 | Byte-identical files; K3's `step.ts` rewrite and K4's appended re-export apply to the copy, K4's edited file byte-identical to before |
+| `module(workspace)` of `graph.test.mjs` (5 sources) | `beyond/graph/fixtures/module/` | F1–F3 | Byte-identical files |
+| The `node -e` consumer of `express.test.mjs` | `beyond/express/fixtures/consumer.mjs` | Both `Express … serves real HTTP` cases | Same text without the template indentation, still evaluated with `--input-type=module -e` in the same directory; the CommonJS case substitutes the one expression the format used to select |
+| The `node -e` consumer of `react.test.mjs` | `beyond/react/fixtures/consumer.cjs` | `React and ReactDOM SSR …` | Same text without the template indentation, still evaluated with `-e` in the same directory |
+
+The existing fixture directories of `example/`, `demo/` and `packaging/` received READMEs; their files are unchanged.
+
+```sh
+node --test beyond/packaging/packaging.test.mjs beyond/graph/graph.test.mjs beyond/express/express.test.mjs \
+  beyond/react/react.test.mjs beyond/capabilities.test.mjs beyond/demo/styles.test.mjs \
+  beyond/packaging/boundaries.test.mjs beyond/example/creators.test.mjs
+node --test beyond/packaging/ecosystem.test.mjs
+node beyond/example/run.mjs
+node beyond/demo/build.mjs
+```
+
+| Check | Result |
+| --- | --- |
+| The eight test files, before and after | 31 of 33 both times, with the same case names passing and the same two failing with the same assertion output |
+| Pre-existing failures | `Express graph records transitive installed packages separately from files` and `React outputs retain separate file/package/public graph evidence and System adapters`: each `packageEdges` list gains an unsatisfied `bundled` edge from `@beyond-js/suite-development@0.1.0`, the manifest of a directory that contains the checkout. Package lookup in the React and Express builds walks above the repository root, so the result depends on where the checkout sits. Not caused or repaired by this change |
+| `ecosystem.test.mjs`, after | 8 of 8; its fixtures are unchanged and it was not run before |
+| `example/run.mjs`, `demo/build.mjs`, after | `PASS` and a completed build; the example runner copies its fixture directory, README included, into `.cache/example/sources/` |
+| Byte comparison | A scratch script rebuilt the old written trees from the committed tests and found every fixture file, and every `Workspace.copy()` of it, identical (34 file comparisons, and K4's edited file); the consumers were identical after removing the template indentation |
+| Isolation | No `beyond-esbuild-probe-*` directory remained in the system temporary directory after the runs, and `git status` listed only the intended files |
+
+Not run: `demo/verify.mjs`, `packaging/verify.mjs` and the Go regression cases, whose inputs did not change.

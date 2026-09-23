@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Workspace } from '../workspace.mjs';
 import { Toolchain } from '../toolchain.mjs';
 import { Traversal } from './traversal.mjs';
@@ -19,25 +20,9 @@ const manifests = [
   { name: '@fixture/legacy', version: '2.0.0', exports: { './main': './main.mjs' } }
 ];
 
-/** Writes the authored module used by every assertion below. */
+/** Copies the checked-in module of `fixtures/module/` used by F1–F3 into a temporary workspace. */
 function module(workspace) {
-  workspace.set('index.ts', `import { format } from './format';
-import type { Shape } from './types';
-import { unused } from './unused';
-import { gone } from '@fixture/gone/main';
-import { greeting } from '@fixture/shared/message';
-import { theme } from '@fixture/app/settings';
-import { join } from 'node:path';
-import React from 'react';
-const legacy = require('@fixture/legacy/main');
-export const lazy = () => import('@fixture/shared/lazy');
-export const strict = () => import('@fixture/strict/main');
-export const view = (shape: Shape) => format(greeting() + theme + join('a', 'b') + legacy + React.version);
-`);
-  workspace.set('format.ts', "import { Decoration } from './nested/decoration';\nexport const format = (value: string) => new Decoration().apply(value);\n");
-  workspace.set('nested/decoration.ts', "import { palette } from '@fixture/shared/message';\nexport class Decoration { apply(value: string) { return palette + value; } }\n");
-  workspace.set('types.ts', 'export interface Shape { value: number }\n');
-  workspace.set('unused.ts', "import '@fixture/shared/message';\nexport const unused = 1;\n");
+  workspace.copy(fileURLToPath(new URL('./fixtures/module/', import.meta.url)));
 }
 
 async function graph(workspace) {

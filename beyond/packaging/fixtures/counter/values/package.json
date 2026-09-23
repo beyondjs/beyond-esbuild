@@ -1,0 +1,1 @@
+{"name":"@fixture/values","version":"1.0.0","exports":{"./counter":"./counter/index.ts","./again":"./again/index.ts"}}

@@ -27,7 +27,7 @@ node --test beyond/react/react.test.mjs
 node --test beyond/express/express.test.mjs
 ```
 
-The creator, graph and style tests build disposable fixtures in the system temporary directory and remove them. `creators.test.mjs` links the pinned Kernel into each fixture and starts child Node processes with `--enable-source-maps`.
+The creator, graph and style tests build disposable fixtures in the system temporary directory and remove them; the graph test copies its module from the checked-in `beyond/graph/fixtures/module/`. Checked-in source fixtures live under each area's `fixtures/`, each with a README, and a run never edits them; the [workspace guide](../beyond/README.md#tests-fixtures-and-generated-output) lists them and the inputs that stay inline. `creators.test.mjs` links the pinned Kernel into each fixture and starts child Node processes with `--enable-source-maps`.
 
 React and Express tests build their own artifacts. Their standalone build commands are useful when preparing the browser demo or inspecting output:
 
@@ -36,7 +36,7 @@ node beyond/react/build.mjs
 node beyond/express/build.mjs
 ```
 
-The creator example leaves initial artifacts, patches, source maps, the three-graph report and provenance under `.cache/example/`; React leaves ESM/System.register/CommonJS artifacts and graphs under `.cache/react/`; Express leaves Node ESM/CommonJS and graphs under `.cache/express/`, all beneath `beyond/`. The creator runner copies the selected Kernel into its isolated generated package map. Express tests bind an ephemeral loopback port, make real HTTP requests and close the server.
+The creator example leaves initial artifacts, patches, source maps, the three-graph report and provenance under `.cache/example/`; React leaves ESM/System.register/CommonJS artifacts and graphs under `.cache/react/`; Express leaves Node ESM/CommonJS and graphs under `.cache/express/`, all beneath `beyond/`. The creator runner copies the selected Kernel into its isolated generated package map. The React and Express tests evaluate their checked-in consumers, `beyond/react/fixtures/consumer.cjs` and `beyond/express/fixtures/consumer.mjs`, in those output directories. Express tests bind an ephemeral loopback port, make real HTTP requests and close the server.
 
 ## Packaging cases
 
@@ -49,7 +49,7 @@ node beyond/packaging/ecosystem.mjs
 PLAYWRIGHT=/absolute/path/to/playwright node beyond/packaging/verify.mjs
 ```
 
-`BEYOND_ECOSYSTEM=/absolute/path` selects another directory that contains the `node_modules` of that list. `packaging.test.mjs` builds disposable authored packages and starts child Node processes that resolve only through the import maps the build wrote. `ecosystem.mjs` writes `beyond/.cache/packaging/<platform>.<environment>/` with the authored and package artifacts, `importmap.json` and the two reports; the verifier adds `browser.json` and `browser.png`, and a `browser.production.system/` tree for the System.register adapter run. `BEYOND_COHESION=off` on the verifier is the negative control of the split build and is expected to fail.
+`BEYOND_ECOSYSTEM=/absolute/path` selects another directory that contains the `node_modules` of that list. `packaging.test.mjs` copies the authored packages of `beyond/packaging/fixtures/counter/` into a disposable directory, builds them and starts child Node processes that resolve only through the import maps the build wrote. `ecosystem.mjs` writes `beyond/.cache/packaging/<platform>.<environment>/` with the authored and package artifacts, `importmap.json` and the two reports; the verifier adds `browser.json` and `browser.png`, and a `browser.production.system/` tree for the System.register adapter run. `BEYOND_COHESION=off` on the verifier is the negative control of the split build and is expected to fail.
 
 `node beyond/package.mjs` lays the prepared compiler out as an unpublished, self-contained package under `beyond/.cache/npm/node_modules/esbuild`, with the native binary of this platform as its sibling package and a `beyond.json` that records revision, toolchain and binary digest. It is what the Packages trial selects by location; rerun it after `prepare.mjs`.
 

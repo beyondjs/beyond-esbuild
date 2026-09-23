@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync as read } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Toolchain } from '../toolchain.mjs';
 import { Workspace } from '../workspace.mjs';
 import { Authored } from './authored.mjs';
@@ -9,37 +10,20 @@ import { ConsumerProcess } from './process.mjs';
 import { Target } from './resolution.mjs';
 
 const toolchain = await Toolchain.load();
-const counter = "import { step } from './step';\nexport let count = 0;\n" +
-  'export function increment() { count += step; return count; }\nexport default class Counter { label = \'counter\'; }\n';
+const sources = fileURLToPath(new URL('./fixtures/counter/', import.meta.url));
 
-/** Three authored packages: a value module, a facade that only re-exports, and a consumer. */
+/**
+ * The checked-in packages of `fixtures/counter/` (a value module, a facade that only re-exports,
+ * and a consumer), copied to a temporary workspace; tests edit only that copy.
+ */
 class Fixture {
   #workspace = new Workspace();
 
-  constructor() {
-    this.set('values', '@fixture/values', { './counter': './counter/index.ts', './again': './again/index.ts' });
-    this.source('values/counter/index.ts', counter);
-    this.source('values/counter/step.ts', 'export const step = 1;\n');
-    this.source('values/shared.ts', 'export const state = { loads: 0 };\nstate.loads++;\nexport const token = {};\n');
-    this.source('values/again/index.ts', "export { increment } from '../counter/index';\nexport { token } from '../shared';\n");
-    this.set('facade', '@fixture/facade', { './api': './api/index.ts', './plain': './plain/index.ts' });
-    this.source('facade/plain/index.ts', 'export const plain = true;\n');
-    this.source('facade/api/index.ts', "export * from '@fixture/values/counter';\n" +
-      "export { default as Counter } from '@fixture/values/counter';\nexport { helper as aid } from './helper';\n" +
-      "export { total, bump } from './totals';\n");
-    this.source('facade/api/helper.ts', "export function helper(): string { return 'aid'; }\n");
-    this.source('facade/api/totals.ts', "import { increment } from '@fixture/values/counter';\nexport let total = 0;\n" +
-      'export function bump() { total = increment(); return total; }\n');
-    this.set('consumer', '@fixture/consumer', { './main': './main/index.ts' });
-    this.source('consumer/main/index.ts', "import * as api from '@fixture/facade/api';\n" +
-      "import { count, Counter } from '@fixture/facade/api';\nexport { increment, bump } from '@fixture/facade/api';\n" +
-      'export function observe() {\n  return { count, star: api.count, total: api.total, aid: api.aid(), label: new Counter().label };\n}\n' +
-      "export function fail(): never {\n  throw new Error('packaged boom');\n}\n");
-  }
+  constructor() { this.#workspace.copy(sources); }
 
   get root() { return this.#workspace.root; }
-  set(directory, name, exports) { this.source(`${directory}/package.json`, JSON.stringify({ name, version: '1.0.0', exports })); }
   source(path, contents) { this.#workspace.set(path, contents); }
+  read(path) { return this.#workspace.read(path); }
   destroy() { this.#workspace.destroy(); }
 
   /** `directory` names the output under the fixture, so two builds of one fixture stay apart. */
@@ -120,7 +104,7 @@ test('K3: a development update reaches a re-export only when public dependents g
 test('K4: a relative import of another public entry is a public reference; other shared files are copied', async t => {
   const fixture = new Fixture();
   t.after(() => fixture.destroy());
-  fixture.source('values/counter/index.ts', `${counter}export { token, state } from '../shared';\n`);
+  fixture.source('values/counter/index.ts', `${fixture.read('values/counter/index.ts')}export { token, state } from '../shared';\n`);
   const { report } = await fixture.authored('production').build();
   const again = report.modules.find(module => module.specifier === '@fixture/values/again');
   assert.deepEqual(again.references.map(reference => reference.specifier), ['@fixture/values/counter']);

@@ -21,6 +21,42 @@ node --test beyond/capabilities.test.mjs
 
 `GO=/absolute/path/to/go node beyond/prepare.mjs` selects a toolchain explicitly. Go may download the dependency pinned in the upstream `go.mod`; normal Go cache configuration applies. Preparation always compiles this checkout, then uses that binary to generate its matching JavaScript API from `lib/npm/node.ts`. It writes only ignored `beyond/.cache/` artifacts, including `provenance.json`; it does not use an installed npm esbuild binary. Rerun preparation after compiler changes. The revision in provenance identifies the base commit, not uncommitted source edits: retain the diff with any future test report.
 
+## Tests, fixtures and generated output
+
+Every area keeps its own tests, harness modules and fixtures together; the suite-wide rule on test organization and source fixtures applies, with the layout differences stated here.
+
+| Location | Holds | Runs |
+| --- | --- | --- |
+| `*.test.mjs` in this directory and in each area | Probe and contract tests, identified by case IDs (G1–X1 below, L1–L6 and M1, F1–F4, Y1, K1–K5, E1–E8, B1–B3, and the named React and Express cases) | `node --test <file>`, with the commands in [setup](../docs/setup.md) |
+| `demo/verify.mjs`, `packaging/verify.mjs` | Real-browser journeys in Chromium with their assertions | Their own entry, documented in the area guide |
+| `fixtures/` inside the consuming area | Permanent source examples, each directory with a README: [example](example/fixtures/README.md), [demo](demo/fixtures/README.md), [graph](graph/fixtures/README.md), [packaging](packaging/fixtures/README.md), [React](react/fixtures/README.md), [Express](express/fixtures/README.md) | Nothing: a harness copies or reads them |
+| Harness modules beside the tests (`workspace.mjs`, `toolchain.mjs`, `packaging/process.mjs` and the others each area guide lists) | Temporary workspaces, compiler loading, consumer processes and builds | Nothing on their own |
+| `.cache/` and system temporary directories | Generated output of a run | Never checked in |
+
+Harness modules stay beside the tests rather than in a `support/` directory: each area guide lists their roles, and the areas are small. [`Workspace`](workspace.mjs) owns a unique temporary directory; `copy()` places a checked-in fixture there, so a test edits only its copy and the checked-in sources stay unchanged even when a run fails. The React and Express consumers are read from their fixture and evaluated with `node -e` in the build output; the Express CommonJS probe substitutes one expression.
+
+These inputs stay inline, by the narrow exceptions of that rule:
+
+- Probe modules of one to three short files that isolate one compiler or runtime behavior, with their edits: the G1–X1 probes, the creator cases L1–L6 and M1, the F4 cycle, and the K3 and K4 edits to the copied `counter` packages.
+- The `@fixture/stateful` installation of B1–B3: three one- or two-line files whose manifest `exports` each case varies.
+- Y1's stylesheets, whose edits and assertions depend on their exact content; the checked-in demo stylesheets differ from them (see the [demo fixtures](demo/fixtures/README.md)).
+- F1–F3's package manifests, which are data given to `Packages` rather than package directories.
+- Generated sources whose content is derived from a build: the host pages of `demo/server.mjs` and `packaging/verify.mjs` (import maps and stylesheet links of the built artifacts), and the React and Express entry facades that `build.mjs` generates from the exports enumerated from the pinned package. Their output can be inspected under `.cache/`.
+- The Go regression cases in `internal/bundler_tests/bundler_beyond_test.go` keep upstream esbuild's in-memory `files` map, the convention of every upstream bundler test and its snapshots.
+
+Fixtures are built only by these harnesses: no upstream `Makefile` target, Go package pattern (`./cmd/...`, `./internal/...`, `./pkg/...`) or TypeScript project reads `beyond/`, and Node's test runner selects only `*.test.mjs` files. The manual upstream parser check `scripts/parse-ts-files.js` parses every `.ts` file below the directory it is started from; started at the repository root it parses these fixtures too, which only checks that they parse.
+
+## Test organization and source fixtures
+
+These rules are shared by every Beyond repository.
+
+- Contract/unit and integration tests live in `test/` or `tests/`; complete journeys against an installed, composed or exported product live in `acceptance/`, with a README of their own. Harness infrastructure (servers, registries, process lifecycle, copying and substitution) lives in a `support/` directory of the consuming area.
+- Applications, packages, modules, documents and assets a test exercises are checked-in files with their real extensions and directory structure under the consuming area's `fixtures/`. Each fixture group has a README naming its purpose, entry modules, the tests that use it, their command, the expected behavior and any intentionally invalid part. A reader inspects the example without running or decoding a generator.
+- A harness copies the fixtures it runs or edits to a unique temporary directory, substitutes only explicit values such as versions, ports or origins, and never writes the checked-in files, even when a run fails. Credentials, machine paths and build output are never fixture source.
+- Small input values, expected values, protocol payloads and short edits stay inline. Source is generated only when generation is the behavior under test (size or memory stress, combinations, deliberately malformed input); the guide states why, the parameters that reproduce it and how to inspect what was generated.
+- Fixtures stay out of the repository's production compilation, discovery and packaging.
+- Migrating a test preserves its scenario identities, its positive, negative and recovery cases and its real execution path; an existing failure stays reported as a failure.
+
 ## Supporting probes
 
 | ID | Executed assertion | Boundary |
@@ -37,7 +73,7 @@ node --test beyond/capabilities.test.mjs
 ## Add a case or propose a change
 
 1. Cite the current Beyond contract or consumer source in `docs/requirements.md`; label proposed behavior separately.
-2. Add a small independent fixture and an executable assertion. Temporary test inputs belong to `Workspace`; inspectable example artifacts belong under `.cache/`.
+2. Add an executable assertion and its source example. An application, package or module of more than a few lines is a checked-in file with its real extension and structure under the consuming area's `fixtures/`, described in that directory's README (purpose, entry modules, which cases use it, expected behavior and any substitution); the test copies it with `Workspace.copy()` and edits only the copy. A probe input of one to three short lines, a short edit or expected data may stay inline. Inspectable generated artifacts belong under `.cache/`.
 3. Test an adapter using the current public esbuild API first. Capture the input, actual output and expected Beyond behavior when it cannot meet a confirmed requirement.
 4. Record the exact compiler revision, local diff, toolchain, command, pass/fail result and unresolved boundaries in `docs/validation.md`. Passing a test for an expected limitation does not mean the product requirement is satisfied.
 5. Necessary targeted compiler changes are authorized when an evidenced requirement in the authored-module, external-package or graph path requires them. Keep public compatibility and regression coverage explicit; this does not justify a broad unrelated rewrite. Commits, pushes, general consumer migration and publication remain outside the authorized work. Preserve upstream licensing and attribution.

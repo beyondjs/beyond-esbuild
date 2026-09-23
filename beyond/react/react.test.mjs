@@ -5,19 +5,11 @@ import { readFileSync } from 'node:fs';
 import { ReactBuild } from './build.mjs';
 
 const directory = await new ReactBuild().run();
+// The checked-in CommonJS consumer is evaluated in the output directory, where './react.cjs' resolves.
+const consumer = readFileSync(new URL('./fixtures/consumer.cjs', import.meta.url), 'utf8');
 
 test('React and ReactDOM SSR execute through only the built isolated package map', () => {
-  const result = JSON.parse(execFileSync(process.execPath, ['-e', `
-    const React = require('./react.cjs');
-    const server = require('./react-dom-server.cjs');
-    const { jsx } = require('react/jsx-runtime');
-    const Component = () => {
-      const [value] = React.useState('Beyond ESBuild');
-      return jsx('section', { 'data-build': 'fork', children: value });
-    };
-    console.log(JSON.stringify({version: React.version, same: React === require('react'),
-      html: server.renderToString(React.createElement(Component)), files: Object.keys(require.cache)}));
-  `], { cwd: directory, encoding: 'utf8' }));
+  const result = JSON.parse(execFileSync(process.execPath, ['-e', consumer], { cwd: directory, encoding: 'utf8' }));
   assert.equal(result.version, '19.2.0');
   assert.equal(result.same, true);
   assert.equal(result.html, '<section data-build="fork">Beyond ESBuild</section>');

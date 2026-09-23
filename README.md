@@ -32,7 +32,8 @@ The preparation script builds **this checkout's compiler and matching API**. It 
 - [Requirements, acceptance cases and unknowns](docs/requirements.md)
 - [Assigned CommonJS exports: the fork's compiler change](docs/cjs-exports.md)
 - [Compiler subsystem audit and reading coverage](docs/compiler-audit.md)
-- [Executable assessment workspace](beyond/README.md)
+- [Executable assessment workspace](beyond/README.md): tests, source fixtures and generated output
+- [Setup and test commands](docs/setup.md) and [executed validation evidence](docs/validation.md)
 - [Coding standards](docs/coding-standards.md) and [contributor instructions](AGENTS.md)
 
 The current work adds bounded adapters, fixtures, validation and the `cjsExports: 'assign'` compiler option that Beyond's internal-module creators require. Fork-specific compiler code is marked `Beyond ESBuild` in place. No consumer migration, package publication or production CDN deployment has occurred. Passing local examples does not establish complete Packages integration or a general-purpose runtime adapter.

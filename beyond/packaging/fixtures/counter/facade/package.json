@@ -1,0 +1,1 @@
+{"name":"@fixture/facade","version":"1.0.0","exports":{"./api":"./api/index.ts","./plain":"./plain/index.ts"}}

@@ -13,6 +13,6 @@ Beyond keeps three graphs apart: internal source files, public modules and packa
 node --test beyond/graph/graph.test.mjs
 ```
 
-Cases F1–F4 build a disposable module that mixes internal, transitive, unused, type-only, lazy, `require`, builtin, same-package, undeclared, incompatible and undeclared-subpath references, and a second module with a cycle. The creator example writes the same three views for its fixture into `beyond/.cache/example/report.json` under `graphs`.
+Cases F1–F3 copy the checked-in module of [`fixtures/module/`](fixtures/README.md) into a temporary workspace; it mixes internal, transitive, unused, type-only, lazy, `require`, builtin, same-package, undeclared, incompatible and undeclared-subpath references. F4 writes a second, three-line module with a cycle. The creator example writes the same three views for its fixture into `beyond/.cache/example/report.json` under `graphs`.
 
 Nothing here selects a version or resolves a workspace: `Packages` is given its manifests, and `Installed` reads what npm already installed. `import type` edges and computed specifiers are not represented. The report shape is this assessment's, not an approved Beyond graph schema.
